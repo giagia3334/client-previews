@@ -49,7 +49,7 @@ function arrange(cfg, layout){
   layout = layout || cfg.defaultLayout || {};
   const byId = Object.fromEntries(cfg.posts.map(p => [p.id, p]));
   const removed = new Set(layout.removed || []);
-  const ids = (layout.order || []).filter(id => byId[id] && !removed.has(id));
+  const ids = [...new Set(layout.order || [])].filter(id => byId[id] && !removed.has(id));   // a post shows once even if saved twice
   cfg.posts.forEach(p => { if(!ids.includes(p.id) && !removed.has(p.id)) ids.unshift(p.id); });
   const caps = layout.captions || {};
   const pins = new Set(layout.pinned || []);

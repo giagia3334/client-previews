@@ -99,7 +99,7 @@ function renderGrid(){
     const n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve' && !c.resolved).length, 0), s = groupStatus(p);
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<button type="button" class="tile" data-id="${p.id}" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${badge}
-      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დამტკიცდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}</button>`;
+      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დამტკიცდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}${p.variants ? `<span class="vb">${p.variants.length} ვარიანტი</span>` : ''}</button>`;
   }).join('');
 }
 function cmHTML(id){

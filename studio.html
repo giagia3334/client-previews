@@ -136,11 +136,13 @@ function applyOp(l, o){
   else if(o.t === 'caption'){ l.captions = l.captions || {}; l.captions[o.id] = o.text; }
 }
 let pending = [], saving = false, saveT = null;
+const PENDKEY = 'igs_pending_' + CLIENT;
+const keepPending = () => ls.set(PENDKEY, JSON.stringify(pending));
 function change(o){
   applyOp(LAYOUT, o); rebuild();
   // typing: keep only the newest text per caption
   if(o.t === 'caption') pending = pending.filter(p => !(p.t === 'caption' && p.id === o.id));
-  pending.push(o);
+  pending.push(o); keepPending();
   clearTimeout(saveT); saveT = setTimeout(flush, 500);
 }
 async function flush(){
@@ -152,8 +154,8 @@ async function flush(){
     const r = await api.post(CFG, {action:'patch', key:key(), ops, base: CFG.defaultLayout});
     STATE = r.state; LAYOUT = JSON.parse(JSON.stringify(r.state.layout || LAYOUT));
     pending.forEach(o => applyOp(LAYOUT, o));
-    rebuild(); refreshViews(); renderSide(); msg('შენახულია ✓');
-  }catch(e){ pending = ops.concat(pending); msg('ვერ შეინახა: ' + e.message); }
+    keepPending(); rebuild(); refreshViews(); renderSide(); msg(ops.some(o => o.t === 'order') ? 'რიგი შენახულია ✓ ყველასთან ჩანს' : 'შენახულია ✓');
+  }catch(e){ pending = ops.concat(pending); keepPending(); msg('ვერ შეინახა, ვცდი თავიდან: ' + e.message); clearTimeout(saveT); saveT = setTimeout(flush, 5000); }
   saving = false;
   if(pending.length){ clearTimeout(saveT); saveT = setTimeout(flush, 300); }
 }
@@ -178,7 +180,7 @@ function renderGrid(){
     const s = groupStatus(p), n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve' && !c.resolved).length, 0);
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<div class="tile" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="">${badge}
-      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓' : '✎'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}
+      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓' : '✎'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}${p.variants ? `<span class="vb">${p.variants.length} ვარიანტი</span>` : ''}
       <div class="tools"><button type="button" data-act="pin" aria-pressed="${p.pinned}" title="მიმაგრება">📌</button><button type="button" data-act="del" title="წაშლა">✕</button></div></div>`;
   }).join('');
 }
@@ -219,7 +221,7 @@ $('#grid').addEventListener('click', e => { if(e.target.closest('[data-act]')) r
 function initSortable(){
   if(!window.Sortable) return;
   Sortable.create($('#grid'), { animation:160, delay:220, delayOnTouchOnly:true, filter:'.tools', preventOnFilter:false,
-    onEnd(){ const order = [...$('#grid').children].flatMap(c => idsOf(groupOf(c.dataset.id))); change({t:'order', order}); renderGrid(); } });
+    onEnd(){ const order = [...new Set([...$('#grid').children].flatMap(c => idsOf(groupOf(c.dataset.id))))]; change({t:'order', order}); renderGrid(); } });
 }
 
 /* feed with editable captions */
@@ -289,6 +291,8 @@ $('#syncBtn').onclick = async () => {
     }catch(e){ msg('კავშირი ვერ დამყარდა: ' + e.message); }
   };
   await pull(true);
+  // edits left unsaved last time (offline, no team code yet) are sent now
+  try{ const left = JSON.parse(ls.get(PENDKEY) || '[]'); if(left.length){ left.forEach(o => applyOp(LAYOUT, o)); pending = left.concat(pending); rebuild(); renderGrid(); flush(); } }catch(e){}
   setInterval(() => { if(document.visibilityState === 'visible') pull(false); }, 6000);
   document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') pull(false); });
 })();
