@@ -92,7 +92,7 @@ body.dark .panel p{color:#A99C90}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 <script src="core.js"></script>
 <script>
-let CFG = null, LAYOUT = null, POSTS = [], STATE = {comments:[], status:{}}, dirty = 0;
+let CFG = null, LAYOUT = null, POSTS = [], STATE = {comments:[], status:{}};
 const KEYNAME = 'igs_key_' + CLIENT;
 const key = () => ls.get(KEYNAME) || '';
 const statusOf = id => (STATE.status || {})[id] || '';
@@ -112,21 +112,50 @@ const msg = (m) => { $('#msg').textContent = m; if(matchMedia('(max-width:860px)
 $('#key').value = key();
 $('#keySave').onclick = async () => {
   const k = $('#key').value.trim(); if(k.length < 6){ msg('კოდი მინიმუმ 6 სიმბოლო უნდა იყოს.'); return; }
-  try{ await api.post(CFG, {action:'checkKey', key:k}); ls.set(KEYNAME, k); msg('კოდი შენახულია ✓'); }catch(e){ msg('კოდი არასწორია.'); }
+  try{ await api.post(CFG, {action:'checkKey', key:k}); ls.set(KEYNAME, k); msg('კოდი შენახულია ✓'); flush(); }catch(e){ msg('კოდი არასწორია.'); }
 };
 
 function cloneLayout(){ return JSON.parse(JSON.stringify(LAYOUT)); }
 function rebuild(){ POSTS = arrange(CFG, LAYOUT); $('#pc').textContent = POSTS.length; }
 
-let saveT = null;
-function save(){
-  LAYOUT.updated = Date.now(); dirty = LAYOUT.updated; rebuild();
-  clearTimeout(saveT);
-  saveT = setTimeout(async () => {
-    if(!key()){ msg('ცვლილება არ შეინახა და კლიენტი მას ვერ ნახავს: ⚙︎ პანელში ერთხელ ჩაწერე გუნდის კოდი.'); return; }
-    try{ const r = await api.post(CFG, {action:'saveLayout', key:key(), layout: LAYOUT}); STATE = r.state; msg('შენახულია ✓'); renderSide(); }
-    catch(e){ msg('ვერ შეინახა: ' + e.message); }
-  }, 600);
+/* Every edit is a small operation sent to the sheet, which applies it to the shared layout
+   under a lock, so two people editing at once never undo each other. */
+function applyOp(l, o){
+  if(o.t === 'order') l.order = o.order;
+  else if(o.t === 'pin'){ const p = (l.pinned || []).filter(x => x !== o.id); if(o.on) p.push(o.id); l.pinned = p; }
+  else if(o.t === 'remove'){ l.removed = [...(l.removed || []).filter(x => x !== o.id), o.id]; }
+  else if(o.t === 'restore') l.removed = (l.removed || []).filter(x => x !== o.id);
+  else if(o.t === 'caption'){ l.captions = l.captions || {}; l.captions[o.id] = o.text; }
+}
+let pending = [], saving = false, saveT = null;
+function change(o){
+  applyOp(LAYOUT, o); rebuild();
+  // typing: keep only the newest text per caption
+  if(o.t === 'caption') pending = pending.filter(p => !(p.t === 'caption' && p.id === o.id));
+  pending.push(o);
+  clearTimeout(saveT); saveT = setTimeout(flush, 500);
+}
+async function flush(){
+  if(saving){ clearTimeout(saveT); saveT = setTimeout(flush, 400); return; }
+  if(!pending.length) return;
+  if(!key()){ msg('ცვლილება ჯერ არ შენახულა და სხვები მას ვერ ხედავენ: ⚙︎ პანელში ერთხელ ჩაწერე გუნდის კოდი.'); return; }
+  saving = true; const ops = pending; pending = [];
+  try{
+    const r = await api.post(CFG, {action:'patch', key:key(), ops, base: CFG.defaultLayout});
+    STATE = r.state; LAYOUT = JSON.parse(JSON.stringify(r.state.layout || LAYOUT));
+    pending.forEach(o => applyOp(LAYOUT, o));
+    rebuild(); refreshViews(); renderSide(); msg('შენახულია ✓');
+  }catch(e){ pending = ops.concat(pending); msg('ვერ შეინახა: ' + e.message); }
+  saving = false;
+  if(pending.length){ clearTimeout(saveT); saveT = setTimeout(flush, 300); }
+}
+/* show the shared state without disturbing the caption being typed */
+function refreshViews(){
+  if($('#fv').hidden){ renderGrid(); return; }
+  document.querySelectorAll('#feed [data-cap]').forEach(el => {
+    if(el === document.activeElement) return;
+    const p = POSTS.find(x => x.id === el.dataset.cap); if(p && el.innerText.replace(/\n$/, '') !== p.caption) el.textContent = p.caption;
+  });
 }
 
 function renderProfile(){
@@ -153,7 +182,7 @@ function renderSide(){
   $('#rmBox').hidden = !rm.length;
   $('#rm').innerHTML = rm.map(id => `<button type="button" class="pbtn" data-restore="${id}">↩ ${esc(title(id))}</button>`).join('');
 }
-$('#rm').addEventListener('click', e => { const b = e.target.closest('[data-restore]'); if(!b) return; LAYOUT.removed = LAYOUT.removed.filter(x => x !== b.dataset.restore); save(); renderGrid(); renderSide(); });
+$('#rm').addEventListener('click', e => { const b = e.target.closest('[data-restore]'); if(!b) return; const id = b.dataset.restore; change({t:'restore', id}); renderGrid(); renderSide(); });
 $('#clist').addEventListener('click', e => { const c = e.target.closest('[data-go]'); if(c) openPost(c.dataset.go); });
 
 /* grid actions (pointerdown so the drag library never swallows them) */
@@ -161,15 +190,15 @@ $('#grid').addEventListener('pointerdown', e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   e.preventDefault(); e.stopPropagation();
   const id = b.closest('.tile').dataset.id;
-  if(b.dataset.act === 'pin'){ const s = new Set(LAYOUT.pinned || []); s.has(id) ? s.delete(id) : s.add(id); LAYOUT.pinned = [...s]; }
-  if(b.dataset.act === 'del'){ LAYOUT.removed = [...new Set([...(LAYOUT.removed || []), id])]; toast('პოსტი ამოღებულია. პანელიდან დააბრუნებ.'); }
-  save(); renderGrid(); renderSide();
+  if(b.dataset.act === 'pin'){ const on = !(LAYOUT.pinned || []).includes(id); change({t:'pin', id, on}); }
+  if(b.dataset.act === 'del'){ change({t:'remove', id}); toast('პოსტი ამოღებულია. პანელიდან დააბრუნებ.'); }
+  renderGrid(); renderSide();
 }, true);
 $('#grid').addEventListener('click', e => { if(e.target.closest('[data-act]')) return; const t = e.target.closest('.tile'); if(t) openPost(t.dataset.id); });
 function initSortable(){
   if(!window.Sortable) return;
   Sortable.create($('#grid'), { animation:160, delay:220, delayOnTouchOnly:true, filter:'.tools', preventOnFilter:false,
-    onEnd(){ LAYOUT.order = [...$('#grid').children].map(c => c.dataset.id); save(); renderGrid(); } });
+    onEnd(){ const order = [...$('#grid').children].map(c => c.dataset.id); change({t:'order', order}); renderGrid(); } });
 }
 
 /* feed with editable captions */
@@ -193,7 +222,7 @@ function renderFeed(){
 }
 $('#feed').addEventListener('input', e => {
   const el = e.target.closest('[data-cap]'); if(!el) return;
-  LAYOUT.captions = LAYOUT.captions || {}; LAYOUT.captions[el.dataset.cap] = el.innerText.replace(/\n$/, ''); save();
+  const id = el.dataset.cap, txt = el.innerText.replace(/\n$/, ''); change({t:'caption', id, text: txt});
 });
 $('#feed').addEventListener('click', e => {
   const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
@@ -230,12 +259,13 @@ $('#syncBtn').onclick = async () => {
   const pull = async (first) => {
     try{
       const s = await api.state(CFG); STATE = s;
-      if(s.layout && (first || ((s.layout.updated || 0) > (LAYOUT.updated || 0) && Date.now() - dirty > 3000))){ LAYOUT = s.layout; rebuild(); if($('#fv').hidden) renderGrid(); }
-      renderSide(); if($('#fv').hidden) renderGrid();
+      // the shared layout wins unless this device still has edits on their way
+      if(s.layout && !pending.length && !saving){ LAYOUT = s.layout; rebuild(); }
+      renderSide(); refreshViews();
     }catch(e){ msg('კავშირი ვერ დამყარდა: ' + e.message); }
   };
   await pull(true);
-  setInterval(() => { if(document.visibilityState === 'visible') pull(false); }, 15000);
+  setInterval(() => { if(document.visibilityState === 'visible') pull(false); }, 6000);
   document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') pull(false); });
 })();
 </script>
