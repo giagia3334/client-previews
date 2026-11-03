@@ -37,7 +37,7 @@
  "posts": [
   {
    "id": "n_mzia_c3",
-   "title": "მზია: ორსულობა, ვერსია C3",
+   "title": "ორსულობა და კბილის მკურნალობა · ვარიანტი 4",
    "type": "reel",
    "media": [
     "n_mzia_c3.jpg"
@@ -46,11 +46,12 @@
    "match": "ორსულობა",
    "posted": false,
    "postType": "Informational",
-   "video": "n_mzia_c3.mp4"
+   "video": "n_mzia_c3.mp4",
+   "group": "mzia_preg"
   },
   {
    "id": "n_mzia_c2",
-   "title": "მზია: ორსულობა, ვერსია C2",
+   "title": "ორსულობა და კბილის მკურნალობა · ვარიანტი 3",
    "type": "reel",
    "media": [
     "n_mzia_c2.jpg"
@@ -59,11 +60,12 @@
    "match": "ორსულობა",
    "posted": false,
    "postType": "Informational",
-   "video": "n_mzia_c2.mp4"
+   "video": "n_mzia_c2.mp4",
+   "group": "mzia_preg"
   },
   {
    "id": "n_mzia_c1",
-   "title": "მზია: ორსულობა, ვერსია C1",
+   "title": "ორსულობა და კბილის მკურნალობა · ვარიანტი 2",
    "type": "reel",
    "media": [
     "n_mzia_c1.jpg"
@@ -72,11 +74,12 @@
    "match": "ორსულობა",
    "posted": false,
    "postType": "Informational",
-   "video": "n_mzia_c1.mp4"
+   "video": "n_mzia_c1.mp4",
+   "group": "mzia_preg"
   },
   {
    "id": "n_mzia_a",
-   "title": "მზია: ორსულობა, ვერსია A",
+   "title": "ორსულობა და კბილის მკურნალობა · ვარიანტი 1",
    "type": "reel",
    "media": [
     "n_mzia_a.jpg"
@@ -85,7 +88,8 @@
    "match": "ორსულობა",
    "posted": false,
    "postType": "Informational",
-   "video": "n_mzia_a.mp4"
+   "video": "n_mzia_a.mp4",
+   "group": "mzia_preg"
   },
   {
    "id": "n_odor_a",
