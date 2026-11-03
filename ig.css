@@ -92,7 +92,7 @@ button{font-family:inherit}
 .rv-list{position:absolute;inset:0;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none}
 .rv-list::-webkit-scrollbar{display:none}
 .rv-item{position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always}
-.rv-item video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.rv-item video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
 .rv-play{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
 .rv-play[hidden]{display:none}
 .rv-close{position:absolute;top:12px;left:10px;z-index:3;appearance:none;border:0;background:rgba(0,0,0,.25);border-radius:50%;width:40px;height:40px;display:grid;place-items:center;cursor:pointer}
