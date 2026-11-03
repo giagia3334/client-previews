@@ -12,6 +12,14 @@ const ls = {
 };
 const mediaUrl = f => BASE + 'media/' + f;
 
+/* home-screen icon (white logo) when the page is added from Safari or Chrome */
+(() => {
+  const add = (rel, href, sizes) => { const l = document.createElement('link'); l.rel = rel; l.href = href; if(sizes) l.sizes = sizes; document.head.appendChild(l); };
+  add('apple-touch-icon', BASE + 'apple-touch-icon.png', '180x180');
+  add('icon', BASE + 'icon-192.png', '192x192');
+  const m = document.createElement('meta'); m.name = 'apple-mobile-web-app-title'; m.content = CLIENT.charAt(0).toUpperCase() + CLIENT.slice(1); document.head.appendChild(m);
+})();
+
 async function loadConfig(){
   const r = await fetch(BASE + 'config.json', {cache:'no-store'});
   if(!r.ok) throw new Error('config ' + r.status);
@@ -27,8 +35,12 @@ const api = {
   async post(cfg, body){
     if(!cfg.api) throw new Error('no api');
     // text/plain body keeps this a "simple" request (no CORS preflight) for Apps Script
-    const r = await fetch(cfg.api, {method:'POST', body: JSON.stringify(body)});
-    const j = await r.json(); if(!j.ok) throw new Error(j.error || 'api'); return j;
+    // a stuck request must not leave the page waiting forever
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), body.action === 'sync' ? 300000 : 30000);
+    try{
+      const r = await fetch(cfg.api, {method:'POST', body: JSON.stringify(body), signal: ac.signal});
+      const j = await r.json(); if(!j.ok) throw new Error(j.error || 'api'); return j;
+    }finally{ clearTimeout(t); }
   }
 };
 
