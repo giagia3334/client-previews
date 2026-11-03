@@ -9,6 +9,11 @@
  "api": "https://script.google.com/macros/s/AKfycbyKoiejkWdqST3GPB-OsnBxpHHxcAVpKC32RNbfCGx6TIDn1RgDX7394TR5OSbMAWQ/exec",
  "defaultLayout": {
   "order": [
+   "n_odor_a",
+   "n_mzia_a",
+   "n_mzia_c1",
+   "n_mzia_c2",
+   "n_mzia_c3",
    "n_p1",
    "n_pov",
    "n_p3",
@@ -30,6 +35,71 @@
   "removed": []
  },
  "posts": [
+  {
+   "id": "n_mzia_c3",
+   "title": "მზია: ორსულობა, ვერსია C3",
+   "type": "reel",
+   "media": [
+    "n_mzia_c3.jpg"
+   ],
+   "caption": "ორსულობისას შეიძლება კბილის მკურნალობა?",
+   "match": "ორსულობა",
+   "posted": false,
+   "postType": "Informational",
+   "video": "n_mzia_c3.mp4"
+  },
+  {
+   "id": "n_mzia_c2",
+   "title": "მზია: ორსულობა, ვერსია C2",
+   "type": "reel",
+   "media": [
+    "n_mzia_c2.jpg"
+   ],
+   "caption": "ორსულობისას შეიძლება კბილის მკურნალობა?",
+   "match": "ორსულობა",
+   "posted": false,
+   "postType": "Informational",
+   "video": "n_mzia_c2.mp4"
+  },
+  {
+   "id": "n_mzia_c1",
+   "title": "მზია: ორსულობა, ვერსია C1",
+   "type": "reel",
+   "media": [
+    "n_mzia_c1.jpg"
+   ],
+   "caption": "ორსულობისას შეიძლება კბილის მკურნალობა?",
+   "match": "ორსულობა",
+   "posted": false,
+   "postType": "Informational",
+   "video": "n_mzia_c1.mp4"
+  },
+  {
+   "id": "n_mzia_a",
+   "title": "მზია: ორსულობა, ვერსია A",
+   "type": "reel",
+   "media": [
+    "n_mzia_a.jpg"
+   ],
+   "caption": "ორსულობისას შეიძლება კბილის მკურნალობა?",
+   "match": "ორსულობა",
+   "posted": false,
+   "postType": "Informational",
+   "video": "n_mzia_a.mp4"
+  },
+  {
+   "id": "n_odor_a",
+   "title": "პირის უსიამოვნო სუნი",
+   "type": "reel",
+   "media": [
+    "n_odor_a.jpg"
+   ],
+   "caption": "რატომ ჩნდება პირის უსიამოვნო სუნი და რა ვქნათ?",
+   "match": "უსიამოვნო სუნი",
+   "posted": false,
+   "postType": "Informational",
+   "video": "n_odor_a.mp4"
+  },
   {
    "id": "n_p1",
    "title": "5 ფაქტი იმპლანტზე",
