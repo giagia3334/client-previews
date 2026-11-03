@@ -143,8 +143,6 @@ function bindFeed(){
   });
 }
 function openPost(id){
-  const p = POSTS.find(x => x.id === id);
-  if(p && p.video){ openReelViewer(id); return; }
   renderFeed(); $('#pv').hidden = true; $('#fv').hidden = false;
   const el = document.getElementById('post-' + id); $('#fv').scrollTop = el ? el.offsetTop - 50 : 0;
 }
