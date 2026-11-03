@@ -104,7 +104,7 @@ function renderGrid(){
 }
 function cmHTML(id){
   return commentsOf(id).map(c => c.type === 'approve'
-    ? `<div class="cm ok"><b>${esc(c.name)}</b>✓ დაადასტურა<small>${fmtTime(c.ts)}</small></div>`
+    ? `<div class="cm ok"><b>${esc(c.name)}</b>✓ დაადასტურა<small>${fmtTime(c.ts)}${c.reopened ? ' · ხელახლა განსახილველია' : ''}</small></div>`
     : `<div class="cm"><b>${esc(c.name)}</b>${esc(c.text)}<small>${c.pending ? 'იგზავნება…' : fmtTime(c.ts)}${c.resolved ? ' · ✓ გასწორდა' : ''}</small></div>`).join('');
 }
 function capHTML(p){

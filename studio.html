@@ -193,13 +193,24 @@ function renderSide(){
   $('#rm').innerHTML = rm.map(id => `<button type="button" class="pbtn" data-restore="${id}">↩ ${esc(title(id))}</button>`).join('');
 }
 $('#rm').addEventListener('click', e => { const b = e.target.closest('[data-restore]'); if(!b) return; const id = b.dataset.restore; change({t:'restore', id}); renderGrid(); renderSide(); });
-$('#clist').addEventListener('click', e => { if(e.target.closest('[data-fix]')) return; const c = e.target.closest('[data-go]'); if(c) openPost(c.dataset.go); });
+$('#clist').addEventListener('click', e => { if(e.target.closest('[data-fix],[data-reopen]')) return; const c = e.target.closest('[data-go]'); if(c) openPost(c.dataset.go); });
 /* the team marks a client's change request as done; the client then sees it as fixed */
 function fixHTML(c){
+  // an approval can be taken back: the post goes back to the client for review
+  if(c.type === 'approve') return c.reopened ? '<br><span class="fixed">↩ დაბრუნდა განსახილველად</span>' : `<br><button type="button" class="fix" data-reopen="${esc(c.post)}">↩ განსახილველად დაბრუნება</button>`;
   if(c.type !== 'comment') return '';
   return c.resolved ? '<br><span class="fixed">✓ გასწორდა</span>' : `<br><button type="button" class="fix" data-fix="${esc(c.post)}" data-ts="${c.ts}">✓ გასწორდა</button>`;
 }
 document.addEventListener('click', async e => {
+  const r = e.target.closest('[data-reopen]');
+  if(r){
+    e.stopPropagation();
+    if(!key()){ msg('ჯერ ⚙︎ პანელში ჩაწერე გუნდის კოდი.'); return; }
+    r.disabled = true; r.textContent = 'ინახება…';
+    try{ const res = await api.post(CFG, {action:'reopen', key:key(), post:r.dataset.reopen}); STATE = res.state; document.querySelectorAll(`[data-reopen="${r.dataset.reopen}"]`).forEach(x => x.outerHTML = '<span class="fixed">↩ დაბრუნდა განსახილველად</span>'); renderSide(); refreshViews(); msg('დადასტურება მოხსნილია, პოსტი ისევ განსახილველია ✓'); }
+    catch(err){ r.disabled = false; r.textContent = '↩ განსახილველად დაბრუნება'; msg('ვერ შეინახა: ' + err.message); }
+    return;
+  }
   const b = e.target.closest('[data-fix]'); if(!b) return;
   e.stopPropagation();
   if(!key()){ msg('ჯერ ⚙︎ პანელში ჩაწერე გუნდის კოდი.'); return; }
