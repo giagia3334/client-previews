@@ -9,6 +9,7 @@
  *  - studio saveLayout (key) -> stores the grid order/pins/captions so every device sees the same
  *  - studio patch (key) -> applies single edits (pin, order, caption, remove) to the stored layout
  *  - studio resolve (key) -> marks a client's change request as done, row loses its pink colour
+ *  - studio reopen (key) -> takes back a client's approval, the post is up for review again
  *  - studio sync (key) -> creates/links rows, fills captions, uploads media to Drive, reorders rows
  */
 var CONF = {
@@ -45,6 +46,7 @@ function doPost(e) {
     else if (b.action === 'saveLayout') { checkKey_(b.key); saveLayout_(b.layout); res = {}; }
     else if (b.action === 'patch') { checkKey_(b.key); patch_(b.ops || [], b.base); res = {}; }
     else if (b.action === 'resolve') { checkKey_(b.key); res = resolve_(b); }
+    else if (b.action === 'reopen') { checkKey_(b.key); res = reopen_(b); }
     else if (b.action === 'sync') { checkKey_(b.key); res = sync_(b); }
     else if (b.action === 'checkKey') { checkKey_(b.key); res = {}; }
     else throw new Error('unknown action');
@@ -143,6 +145,12 @@ function state_() {
   rows.forEach(function (r) {
     var ts = r[0] instanceof Date ? r[0].getTime() : Number(r[0]);
     var post = String(r[1]), type = String(r[3]);
+    if (type === 'reopened') {
+      // the team took back a client's approval: the post needs review again
+      comments.forEach(function (c) { if (c.post === post && c.type === 'approve') c.reopened = true; });
+      if (status[post] === 'approved') delete status[post];
+      return;
+    }
     if (type === 'resolved') {
       // the team marked a requested change as done (text = the comment's ts, empty = all of that post)
       var target = Number(r[4]) || 0;
@@ -207,6 +215,19 @@ function notify_(type, b, post, name, text, row) {
 }
 /* run once from the editor so the script may send email */
 function authorizeEmail() { Logger.log(MailApp.getRemainingDailyQuota()); }
+
+/* team takes back a client's approval, so the post is up for review again */
+function reopen_(b) {
+  var post = clean_(b.post, 60);
+  if (!post) throw new Error('empty');
+  aux_('_comments', ['ts', 'post', 'name', 'type', 'text']).appendRow([new Date(), post, 'გუნდი', 'reopened', '']);
+  var row = findRow_(post);
+  if (row) {
+    sheet_().getRange(row, cols_().clientStatus).setValue('ხელახლა განსახილველი');
+    paint_(row, null);
+  }
+  return { row: row };
+}
 
 /* team marks a client's change request as done */
 function resolve_(b) {
