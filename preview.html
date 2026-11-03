@@ -123,9 +123,9 @@ function renderFeed(){
   <article class="post" id="post-${p.id}">
     <div class="ph"><span class="mini"><img src="${mediaUrl(CFG.avatar)}" alt=""></span><b>${esc(CFG.username)}</b>${IC.dots}</div>
     <div class="media">${p.variants
-      ? `<div class="track vt" data-n="${p.variants.length}">${p.variants.map((v,i) => `<div class="vs" data-v="${v.id}"><video src="${mediaUrl(v.video)}" poster="${mediaUrl(v.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span><span class="vlab">ვარიანტი ${i+1}</span></div>`).join('')}</div><span class="cnt">1/${p.variants.length}</span>`
+      ? `<div class="track vt" data-n="${p.variants.length}">${p.variants.map((v,i) => `<div class="vs" data-v="${v.id}"><video data-src="${mediaUrl(v.video)}" poster="${mediaUrl(v.media[0])}" playsinline muted loop preload="none"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span><span class="vlab">ვარიანტი ${i+1}</span></div>`).join('')}</div><span class="cnt">1/${p.variants.length}</span>`
       : p.video
-      ? `<video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span>`
+      ? `<video data-src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="none"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span>`
       : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
     <div class="pa">${IC.heart}<button type="button" class="ibtn" data-cmt="${p.id}" aria-label="კომენტარი" style="padding:0">${IC.cmt}</button>${IC.send}<span class="sp"></span>
       ${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
@@ -138,9 +138,17 @@ function renderFeed(){
   </article>`).join('');
   bindFeed();
 }
-let io = null;
+let io = null, near = null;
 function bindFeed(){
   if(io) io.disconnect();
+  // phones handle only a few videos at once: load a video when it comes near the screen, free it when it leaves
+  if(near) near.disconnect();
+  near = new IntersectionObserver(es => es.forEach(en => {
+    const v = en.target;
+    if(en.isIntersecting){ if(!v.getAttribute('src')){ v.src = v.dataset.src; v.preload = 'metadata'; } }
+    else if(v.getAttribute('src')){ v.pause(); v.removeAttribute('src'); v.load(); }
+  }), {root: $('#fv'), rootMargin: '600px 0px'});
+  document.querySelectorAll('#feed video').forEach(v => near.observe(v));
   io = new IntersectionObserver(es => es.forEach(en => { const v = en.target; if(en.isIntersecting && en.intersectionRatio > .6) v.play().catch(()=>{}); else v.pause(); }), {root: $('#fv'), threshold:[0,.6,1]});
   document.querySelectorAll('#feed video').forEach(v => {
     io.observe(v); const ov = v.parentNode.querySelector('.playov');

@@ -93,16 +93,19 @@ const IC = {
 const fmtTime = ts => { try{ return new Date(ts).toLocaleString('ka-GE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } };
 
 /* Fullscreen vertical reels viewer, shared by both pages.
+   One <video> element is reused for every reel: phones load only the reel on screen,
+   and once the first tap starts it with sound, iOS keeps sound for the next reels.
    opts: {posts, startId, onComment(id), onApprove(id), statusOf(id)} */
 function openReels(root, opts){
   const reels = opts.posts.filter(p => p.video);
   const start = Math.max(0, reels.findIndex(p => p.id === opts.startId));
+  const fill = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#000';
   const wrap = document.createElement('div');
   wrap.className = 'reelv';
   wrap.innerHTML = `<button type="button" class="rv-close" aria-label="დახურვა">${IC.close}</button>
     <div class="rv-list">${reels.map(p => `
       <section class="rv-item" data-id="${p.id}">
-        <video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline loop preload="metadata"></video>
+        <img class="rv-poster" src="${mediaUrl(p.media[0])}" alt="" style="${fill}">
         <span class="rv-play" hidden>${IC.play}</span>
         <div class="rv-side">
           ${opts.onComment ? `<button type="button" class="rv-btn" data-act="cmt" aria-label="კომენტარი">${IC.cmt.replace('currentColor','#fff')}<small>კომენტარი</small></button>` : ''}
@@ -113,31 +116,43 @@ function openReels(root, opts){
       </section>`).join('')}</div>`;
   root.appendChild(wrap);
   const list = wrap.querySelector('.rv-list');
-  let muted = false;
-  const io = new IntersectionObserver(es => es.forEach(en => {
-    const v = en.target.querySelector('video');
-    if(en.isIntersecting && en.intersectionRatio > .6){ v.muted = muted; v.play().catch(() => { v.muted = true; muted = true; v.play().catch(()=>{}); }); }
-    else { v.pause(); }
-  }), {root: list, threshold:[0,.6,1]});
-  wrap.querySelectorAll('.rv-item').forEach(s => {
-    io.observe(s);
-    const v = s.querySelector('video'), pl = s.querySelector('.rv-play');
-    v.addEventListener('pause', () => pl.hidden = false);
-    v.addEventListener('play', () => pl.hidden = true);
-  });
+  const items = [...wrap.querySelectorAll('.rv-item')];
+  const vid = document.createElement('video');
+  vid.playsInline = true; vid.loop = true; vid.preload = 'auto'; vid.setAttribute('playsinline', '');
+  vid.style.cssText = fill;
+  let muted = false, cur = null;
+  const setMuteIcons = () => wrap.querySelectorAll('[data-act=mute]').forEach(x => x.firstElementChild.outerHTML = muted ? IC.muted : IC.sound);
+  const overlay = () => cur && (cur.querySelector('.rv-play').hidden = !vid.paused);
+  vid.addEventListener('pause', overlay); vid.addEventListener('play', overlay);
+  function play(){
+    vid.muted = muted;
+    const p = vid.play();
+    // the phone refused sound without a tap: keep playing muted and show it
+    if(p) p.catch(() => { muted = true; vid.muted = true; setMuteIcons(); vid.play().catch(() => {}); });
+  }
+  function activate(item){
+    if(cur === item) return;
+    cur = item; const p = reels[items.indexOf(item)];
+    vid.pause(); item.insertBefore(vid, item.querySelector('.rv-play'));
+    vid.poster = mediaUrl(p.media[0]); vid.src = mediaUrl(p.video);
+    play();
+  }
+  activate(items[start]);   // still inside the opening tap, so sound is allowed
+  const io = new IntersectionObserver(es => es.forEach(en => { if(en.isIntersecting && en.intersectionRatio > .6) activate(en.target); }), {root: list, threshold:[0,.6,1]});
+  items.forEach(s => io.observe(s));
   requestAnimationFrame(() => { list.scrollTop = start * list.clientHeight; });
-  const close = () => { io.disconnect(); wrap.querySelectorAll('video').forEach(v => v.pause()); wrap.remove(); };
+  const close = () => { io.disconnect(); vid.pause(); vid.removeAttribute('src'); vid.load(); wrap.remove(); };
   wrap.addEventListener('click', e => {
     if(e.target.closest('.rv-close')){ close(); return; }
     const b = e.target.closest('.rv-btn'); const item = e.target.closest('.rv-item');
     if(b && item){
       const id = item.dataset.id;
-      if(b.dataset.act === 'mute'){ muted = !muted; wrap.querySelectorAll('video').forEach(v => v.muted = muted); wrap.querySelectorAll('[data-act=mute]').forEach(x => x.firstElementChild.outerHTML = muted ? IC.muted : IC.sound); }
+      if(b.dataset.act === 'mute'){ muted = !muted; vid.muted = muted; setMuteIcons(); if(vid.paused) play(); }
       if(b.dataset.act === 'cmt' && opts.onComment) opts.onComment(id);
       if(b.dataset.act === 'ok' && opts.onApprove) opts.onApprove(id, b);
       return;
     }
-    if(item && !e.target.closest('.rv-cap')){ const v = item.querySelector('video'); v.paused ? v.play().catch(()=>{}) : v.pause(); }
+    if(item && !e.target.closest('.rv-cap')){ if(item !== cur) activate(item); else if(vid.paused) play(); else vid.pause(); }
   });
   document.addEventListener('keydown', function k(e){ if(e.key === 'Escape'){ close(); document.removeEventListener('keydown', k); } });
   return close;
