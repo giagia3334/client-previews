@@ -102,7 +102,7 @@ function openReels(root, opts){
   const startAt = reels.findIndex(p => (p.variants || [p]).some(v => v.id === opts.startId));
   const start = Math.max(0, startAt);
   const fill = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#000';
-  const okLabel = (id, many) => opts.statusOf && opts.statusOf(id) === 'approved' ? (many ? 'არჩეულია' : 'დამტკიცდა') : (many ? 'ამას ვირჩევ' : 'დამტკიცება');
+  const okLabel = (id, many) => opts.statusOf && opts.statusOf(id) === 'approved' ? (many ? 'არჩეულია' : 'დადასტურდა') : (many ? 'ამას ვირჩევ' : 'დადასტურება');
   const wrap = document.createElement('div');
   wrap.className = 'reelv';
   wrap.innerHTML = `<button type="button" class="rv-close" aria-label="დახურვა">${IC.close}</button>
@@ -115,7 +115,7 @@ function openReels(root, opts){
         <span class="rv-play" hidden>${IC.play}</span>
         <div class="rv-side">
           ${opts.onComment ? `<button type="button" class="rv-btn" data-act="cmt" aria-label="კომენტარი">${IC.cmt.replace('currentColor','#fff')}<small>კომენტარი</small></button>` : ''}
-          ${opts.onApprove ? `<button type="button" class="rv-btn" data-act="ok" aria-label="დამტკიცება">${IC.check}<small>${okLabel(vs[0].id, many)}</small></button>` : ''}
+          ${opts.onApprove ? `<button type="button" class="rv-btn" data-act="ok" aria-label="დადასტურება">${IC.check}<small>${okLabel(vs[0].id, many)}</small></button>` : ''}
           <button type="button" class="rv-btn" data-act="mute" aria-label="ხმა">${IC.sound}<small>ხმა</small></button>
         </div>
         <div class="rv-cap"><b>${esc(opts.username || '')}</b><span>${esc((g.caption||'').split('\n').slice(0,3).join('\n'))}</span></div>

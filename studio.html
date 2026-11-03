@@ -187,7 +187,7 @@ function renderGrid(){
 function renderSide(){
   const cs = (STATE.comments || []).slice().reverse();
   const title = id => (CFG.posts.find(p => p.id === id) || {}).title || id;
-  $('#clist').innerHTML = cs.length ? cs.map(c => `<div class="ci${c.type==='approve' ? ' ok' : ''}${c.resolved ? ' done' : ''}" data-go="${esc(c.post)}"><small>${esc(title(c.post))} · ${fmtTime(c.ts)}</small><b>${esc(c.name)}:</b> ${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}${fixHTML(c)}</div>`).join('') : '<p>ჯერ არ არის.</p>';
+  $('#clist').innerHTML = cs.length ? cs.map(c => `<div class="ci${c.type==='approve' ? ' ok' : ''}${c.resolved ? ' done' : ''}" data-go="${esc(c.post)}"><small>${esc(title(c.post))} · ${fmtTime(c.ts)}</small><b>${esc(c.name)}:</b> ${c.type==='approve' ? '✓ დაადასტურა' : esc(c.text)}${fixHTML(c)}</div>`).join('') : '<p>ჯერ არ არის.</p>';
   const rm = (LAYOUT.removed || []).filter(id => CFG.posts.some(p => p.id === id));
   $('#rmBox').hidden = !rm.length;
   $('#rm').innerHTML = rm.map(id => `<button type="button" class="pbtn" data-restore="${id}">↩ ${esc(title(id))}</button>`).join('');
@@ -236,7 +236,7 @@ function renderFeed(){
       : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
     <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
     <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}" contenteditable="true" spellcheck="false">${esc(p.caption)}</span></div>
-    <div class="cmts">${idsOf(p).flatMap(id => commentsOf(id).map(c => ({...c, vi: p.variants ? idsOf(p).indexOf(id) + 1 : 0}))).sort((a, b) => a.ts - b.ts).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.vi ? `[ვარიანტი ${c.vi}] ` : ''}${c.type==='approve' ? (c.vi ? '✓ აირჩია' : '✓ დაამტკიცა') : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
+    <div class="cmts">${idsOf(p).flatMap(id => commentsOf(id).map(c => ({...c, vi: p.variants ? idsOf(p).indexOf(id) + 1 : 0}))).sort((a, b) => a.ts - b.ts).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.vi ? `[ვარიანტი ${c.vi}] ` : ''}${c.type==='approve' ? (c.vi ? '✓ აირჩია' : '✓ დაადასტურა') : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
     <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}</div>
   </article>`).join('');
   document.querySelectorAll('#feed .track').forEach(t => {

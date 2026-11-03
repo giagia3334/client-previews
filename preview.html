@@ -24,7 +24,7 @@ body.dark .note{color:#B3A595}
 </head>
 <body>
 <div class="stage">
-  <p class="note">ასე გამოჩნდება ინსტაგრამი ახალი პოსტების შემდეგ. დააჭირეთ პოსტს, ნახეთ ტექსტი და ვიდეო. თითოეულ პოსტზე დააჭირეთ „დამტკიცება“-ს, ან დაწერეთ კომენტარი, თუ რამე შესაცვლელია. ☾/☀︎ ღილაკით ღია და მუქი რეჟიმი ირთვება.</p>
+  <p class="note">ასე გამოჩნდება ინსტაგრამი ახალი პოსტების შემდეგ. დააჭირეთ პოსტს, ნახეთ ტექსტი და ვიდეო. თითოეულ პოსტზე დააჭირეთ „დადასტურება“-ს, ან დაწერეთ კომენტარი, თუ რამე შესაცვლელია. ☾/☀︎ ღილაკით ღია და მუქი რეჟიმი ირთვება.</p>
   <div class="app" id="app">
     <div class="view" id="pv">
       <div class="nav">
@@ -99,12 +99,12 @@ function renderGrid(){
     const n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve' && !c.resolved).length, 0), s = groupStatus(p);
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<button type="button" class="tile" data-id="${p.id}" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${badge}
-      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დამტკიცდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}${p.variants ? `<span class="vb">${p.variants.length} ვარიანტი</span>` : ''}</button>`;
+      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დადასტურდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}${p.variants ? `<span class="vb">${p.variants.length} ვარიანტი</span>` : ''}</button>`;
   }).join('');
 }
 function cmHTML(id){
   return commentsOf(id).map(c => c.type === 'approve'
-    ? `<div class="cm ok"><b>${esc(c.name)}</b>✓ დაამტკიცა<small>${fmtTime(c.ts)}</small></div>`
+    ? `<div class="cm ok"><b>${esc(c.name)}</b>✓ დაადასტურა<small>${fmtTime(c.ts)}</small></div>`
     : `<div class="cm"><b>${esc(c.name)}</b>${esc(c.text)}<small>${c.pending ? 'იგზავნება…' : fmtTime(c.ts)}${c.resolved ? ' · ✓ გასწორდა' : ''}</small></div>`).join('');
 }
 function capHTML(p){
@@ -113,7 +113,7 @@ function capHTML(p){
   return `<b>${esc(CFG.username)}</b><span class="ct">${esc(cut)}</span>${short ? ` <button type="button" class="more" data-full="${p.id}">… more</button>` : ''}`;
 }
 const isVariant = id => POSTS.some(p => p.variants && p.variants.some(v => v.id === id));
-const okText = (id, done) => isVariant(id) ? (done ? ' ეს ვარიანტი არჩეულია' : ' ამ ვარიანტს ვირჩევ') : (done ? ' დამტკიცებულია' : ' დამტკიცება');
+const okText = (id, done) => isVariant(id) ? (done ? ' ეს ვარიანტი არჩეულია' : ' ამ ვარიანტს ვირჩევ') : (done ? ' დადასტურებულია' : ' დადასტურება');
 function apvHTML(p){
   if(p.posted) return '';
   const done = statusOf(p.id) === 'approved';
@@ -225,16 +225,16 @@ $('#shf').onsubmit = e => {
     });
 };
 async function approve(id, btn){
-  if(statusOf(id) === 'approved'){ toast(isVariant(id) ? 'ეს ვარიანტი უკვე არჩეულია.' : 'ეს პოსტი უკვე დამტკიცებულია.'); return; }
+  if(statusOf(id) === 'approved'){ toast(isVariant(id) ? 'ეს ვარიანტი უკვე არჩეულია.' : 'ეს პოსტი უკვე დადასტურებულია.'); return; }
   let name = (ls.get('igp_name') || '').trim();
   if(!name){ name = (prompt('თქვენი სახელი') || '').trim(); if(!name) return; ls.set('igp_name', name); }
   const prev = statusOf(id), local = {ts: Date.now(), post: id, name, type: 'approve', text: '', pending: true};
   STATE.comments = [...(STATE.comments || []), local]; STATE.status = {...(STATE.status || {}), [id]: 'approved'};
-  refreshViews(); toast(isVariant(id) ? 'ვარიანტი არჩეულია ✓' : 'დამტკიცდა ✓');
-  if(btn && btn.closest('.rv-btn')) btn.querySelector('small').textContent = isVariant(id) ? 'არჩეულია' : 'დამტკიცდა';
+  refreshViews(); toast(isVariant(id) ? 'ვარიანტი არჩეულია ✓' : 'დადასტურდა ✓');
+  if(btn && btn.closest('.rv-btn')) btn.querySelector('small').textContent = isVariant(id) ? 'არჩეულია' : 'დადასტურდა';
   sending++;
   try{ const r = await api.post(CFG, {action:'approve', post: id, name}); STATE = r.state || STATE; refreshViews(); }
-  catch(err){ STATE.comments = STATE.comments.filter(c => c !== local); STATE.status[id] = prev; refreshViews(); toast('დამტკიცება ვერ გაიგზავნა. სცადეთ თავიდან.'); }
+  catch(err){ STATE.comments = STATE.comments.filter(c => c !== local); STATE.status[id] = prev; refreshViews(); toast('დადასტურება ვერ გაიგზავნა. სცადეთ თავიდან.'); }
   sending--;
 }
 function refreshViews(){
