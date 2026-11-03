@@ -212,7 +212,7 @@ $('#shf').onsubmit = e => {
   STATE.comments = [...(STATE.comments || []), local]; STATE.status = {...(STATE.status || {}), [post]: 'changes'};
   closeSheet(); refreshViews(); toast('კომენტარი იგზავნება…');
   sending++;
-  api.post(CFG, {action:'comment', post, name, text})
+  api.post(CFG, {action:'comment', post, name, text, title: (flatVariants(POSTS).find(x => x.id === post) || {}).title})
     .then(r => { sending--; STATE = r.state || STATE; refreshViews(); toast('კომენტარი გაიგზავნა, მადლობა!'); })
     .catch(async () => {
       // a slow answer can still have been saved: check the sheet before asking to resend
@@ -233,7 +233,7 @@ async function approve(id, btn){
   refreshViews(); toast(isVariant(id) ? 'ვარიანტი არჩეულია ✓' : 'დადასტურდა ✓');
   if(btn && btn.closest('.rv-btn')) btn.querySelector('small').textContent = isVariant(id) ? 'არჩეულია' : 'დადასტურდა';
   sending++;
-  try{ const r = await api.post(CFG, {action:'approve', post: id, name}); STATE = r.state || STATE; refreshViews(); }
+  try{ const r = await api.post(CFG, {action:'approve', post: id, name, title: (flatVariants(POSTS).find(x => x.id === id) || {}).title}); STATE = r.state || STATE; refreshViews(); }
   catch(err){ STATE.comments = STATE.comments.filter(c => c !== local); STATE.status[id] = prev; refreshViews(); toast('დადასტურება ვერ გაიგზავნა. სცადეთ თავიდან.'); }
   sending--;
 }
