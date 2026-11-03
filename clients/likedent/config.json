@@ -59,7 +59,8 @@
    "match": "POV",
    "posted": false,
    "postType": "Branding",
-   "drive": "https://drive.google.com/file/d/1ccxXRO2is61_Ifr42vi64EAm0hFocr12/view"
+   "drive": "https://drive.google.com/file/d/1ccxXRO2is61_Ifr42vi64EAm0hFocr12/view",
+   "video": "n_pov.mp4"
   },
   {
    "id": "n_p3",
@@ -151,7 +152,8 @@
    "caption": "ყველა ღიმილს თავისი ისტორია აქვს 🦷\n\nჩვენ კი თითოეულზე ვზრუნავთ!\n\n📍 ბაგრატიონის 178, ბათუმი\n📞 568 23 06 08\nპირველი კონსულტაცია უფასოა.\n\n#LikeDent #ბათუმი",
    "match": "",
    "posted": true,
-   "postType": "Informational"
+   "postType": "Informational",
+   "video": "live0.mp4"
   },
   {
    "id": "live1",

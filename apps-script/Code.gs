@@ -214,6 +214,10 @@ function sync_(b) {
       sh.getRange(row, c.postId).setValue(p.id);
       created++;
     }
+    if (p.video) {
+      if (c.media) sh.getRange(row, c.media).setValue('Video');
+      if (c.format) sh.getRange(row, c.format).setValue('Reel');
+    } else if (p.count > 1 && c.format) sh.getRange(row, c.format).setValue('Carousel');
     if (c.caption && p.caption != null) sh.getRange(row, c.caption).setValue(p.caption);
     if (c.slides && p.count) sh.getRange(row, c.slides).setValue(p.count);
     if (c.link && !String(sh.getRange(row, c.link).getValue() || '').trim()) {
