@@ -55,6 +55,18 @@ function arrange(cfg, layout){
   const pins = new Set(layout.pinned || []);
   return ids.map(id => ({...byId[id], caption: caps[id] ?? byId[id].caption, pinned: pins.has(id)}));
 }
+/* posts that share a "group" (versions of one video) show as one post; its versions swipe sideways */
+function groupVariants(posts){
+  const out = [], seen = {};
+  posts.forEach(p => {
+    if(!p.group){ out.push(p); return; }
+    if(seen[p.group]){ seen[p.group].variants.push(p); return; }
+    const g = {...p, variants: [p]}; seen[p.group] = g; out.push(g);
+  });
+  out.forEach(p => { if(p.variants && p.variants.length < 2) delete p.variants; });
+  return out;
+}
+const flatVariants = posts => posts.flatMap(p => p.variants || [p]);
 /* Instagram shows pinned posts first */
 const displayOrder = posts => [...posts.filter(p => p.pinned), ...posts.filter(p => !p.pinned)];
 

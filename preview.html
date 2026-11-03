@@ -10,6 +10,10 @@
 .stage{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 12px 28px;gap:12px}
 .note{max-width:430px;font-size:13.5px;line-height:1.45;color:#5A4E45;text-align:center;margin:0}
 body.dark .note{color:#B3A595}
+/* versions of one video: swipe sideways */
+.vt .vs{flex:0 0 100%;position:relative;scroll-snap-align:start}
+.vlab{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:600;padding:3px 8px;border-radius:12px}
+.vhint{margin:4px 14px 0;font-size:13px;color:var(--sub)}
 @media (max-width:520px){
   body{background:var(--bg)}
   .stage{padding:0;justify-content:flex-start}
@@ -72,6 +76,8 @@ body.dark .note{color:#B3A595}
 let CFG = null, POSTS = [], STATE = {comments:[], status:{}}, sending = 0;
 const commentsOf = id => (STATE.comments || []).filter(c => c.post === id);
 const statusOf = id => (STATE.status || {})[id] || '';
+const idsOf = p => (p.variants || [p]).map(v => v.id);
+function groupStatus(p){ const s = idsOf(p).map(statusOf); return s.includes('approved') ? 'approved' : s.includes('changes') ? 'changes' : ''; }
 
 function setTheme(t){ document.body.classList.toggle('dark', t==='dark'); $('#themeBtn').innerHTML = t==='dark' ? IC.sun : IC.moon; ls.set('igp_theme', t); }
 setTheme(ls.get('igp_theme') || 'light');
@@ -90,7 +96,7 @@ function renderProfile(){
 }
 function renderGrid(){
   $('#grid').innerHTML = displayOrder(POSTS).map(p => {
-    const n = commentsOf(p.id).filter(c => c.type !== 'approve').length, s = statusOf(p.id);
+    const n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve').length, 0), s = groupStatus(p);
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<button type="button" class="tile" data-id="${p.id}" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${badge}
       ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დამტკიცდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}</button>`;
@@ -116,12 +122,15 @@ function renderFeed(){
   $('#feed').innerHTML = displayOrder(POSTS).map(p => `
   <article class="post" id="post-${p.id}">
     <div class="ph"><span class="mini"><img src="${mediaUrl(CFG.avatar)}" alt=""></span><b>${esc(CFG.username)}</b>${IC.dots}</div>
-    <div class="media">${p.video
+    <div class="media">${p.variants
+      ? `<div class="track vt" data-n="${p.variants.length}">${p.variants.map((v,i) => `<div class="vs" data-v="${v.id}"><video src="${mediaUrl(v.video)}" poster="${mediaUrl(v.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span><span class="vlab">ვარიანტი ${i+1}</span></div>`).join('')}</div><span class="cnt">1/${p.variants.length}</span>`
+      : p.video
       ? `<video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span>`
       : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
     <div class="pa">${IC.heart}<button type="button" class="ibtn" data-cmt="${p.id}" aria-label="კომენტარი" style="padding:0">${IC.cmt}</button>${IC.send}<span class="sp"></span>
-      ${p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
+      ${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
     <div class="cap" data-v="${esc(p.caption)}">${capHTML(p)}</div>
+    ${p.variants ? `<p class="vhint">← → გადაფურცლეთ: ${p.variants.length} ვარიანტი. დაამტკიცეთ ის, რომელიც უფრო მოგწონთ.</p>` : ''}
     ${apvHTML(p)}
     <div class="cmts" data-c="${p.id}">${cmHTML(p.id)}</div>
     <button type="button" class="addbtn" data-cmt="${p.id}"><span class="mini">${esc((me || '?').slice(0,1).toUpperCase())}</span>Add a comment…</button>
@@ -139,7 +148,16 @@ function bindFeed(){
   });
   document.querySelectorAll('#feed .track').forEach(t => {
     const post = t.closest('.post'), dots = post.querySelectorAll('.dots i'), cnt = post.querySelector('.cnt');
-    t.addEventListener('scroll', () => { const i = Math.round(t.scrollLeft / t.clientWidth); dots.forEach((d,k) => d.classList.toggle('on', k === i)); if(cnt) cnt.textContent = (i+1) + '/' + t.dataset.n; }, {passive:true});
+    t.addEventListener('scroll', () => {
+      const i = Math.round(t.scrollLeft / t.clientWidth); dots.forEach((d,k) => d.classList.toggle('on', k === i)); if(cnt) cnt.textContent = (i+1) + '/' + t.dataset.n;
+      // a version swipe: approve, comment and the comment list follow the version on screen
+      const s = t.classList.contains('vt') && t.children[i]; if(!s || post.dataset.cur === s.dataset.v) return;
+      post.dataset.cur = s.dataset.v;
+      t.querySelectorAll('video').forEach((v,k) => { if(k === i) v.play().catch(()=>{}); else v.pause(); });
+      post.querySelectorAll('[data-ok]').forEach(b => b.dataset.ok = s.dataset.v);
+      post.querySelectorAll('[data-cmt]').forEach(b => b.dataset.cmt = s.dataset.v);
+      const cm = post.querySelector('.cmts'); cm.dataset.c = s.dataset.v; refreshViews();
+    }, {passive:true});
   });
 }
 function openPost(id){
@@ -148,23 +166,23 @@ function openPost(id){
 }
 function openReelViewer(id){
   document.querySelectorAll('#feed video').forEach(v => v.pause());
-  openReels($('#app'), {posts: displayOrder(POSTS), startId: id, username: CFG.username, statusOf,
+  openReels($('#app'), {posts: flatVariants(displayOrder(POSTS)), startId: id, username: CFG.username, statusOf,
     onComment: id => openSheet(id), onApprove: (id, btn) => approve(id, btn)});
 }
 $('#grid').addEventListener('click', e => { const t = e.target.closest('.tile'); if(t) openPost(t.dataset.id); });
 $('#back').onclick = () => { document.querySelectorAll('#feed video').forEach(v => v.pause()); $('#fv').hidden = true; $('#pv').hidden = false; renderGrid(); };
 $('#feed').addEventListener('click', e => {
-  const m = e.target.closest('.more'); if(m){ const p = POSTS.find(x => x.id === m.dataset.full); m.parentNode.querySelector('.ct').textContent = p.caption; m.remove(); return; }
+  const m = e.target.closest('.more'); if(m){ const p = flatVariants(POSTS).find(x => x.id === m.dataset.full); m.parentNode.querySelector('.ct').textContent = p.caption; m.remove(); return; }
   const c = e.target.closest('[data-cmt]'); if(c){ openSheet(c.dataset.cmt); return; }
   const ok = e.target.closest('[data-ok]'); if(ok){ approve(ok.dataset.ok, ok); return; }
   const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
-  const vid = e.target.closest('video'); if(vid){ openReelViewer(vid.closest('.post').id.slice(5)); }
+  const vid = e.target.closest('video'); if(vid){ const vs = vid.closest('.vs'); openReelViewer(vs ? vs.dataset.v : vid.closest('.post').id.slice(5)); }
 });
 
 /* comment / approve */
 let shPost = null, shMode = 'comment';
 function openSheet(id){
-  const p = POSTS.find(x => x.id === id); shPost = id;
+  const p = flatVariants(POSTS).find(x => x.id === id); shPost = id;
   $('#shimg').src = mediaUrl(p.media[0]);
   $('#shcap').textContent = p.title || (p.caption || '').split('\n')[0];
   $('#shname').value = ls.get('igp_name') || '';
@@ -222,9 +240,9 @@ function refreshViews(){
 /* boot */
 (async () => {
   try{ CFG = await loadConfig(); }catch(e){ $('#st').textContent = 'გვერდი ვერ ჩაიტვირთა.'; $('#st').hidden = false; return; }
-  POSTS = arrange(CFG, null); renderProfile(); renderGrid();
+  POSTS = groupVariants(arrange(CFG, null)); renderProfile(); renderGrid();
   if(!CFG.api){ return; }
-  const load = async () => { try{ const s = await api.state(CFG); STATE = s; if(s.layout){ POSTS = arrange(CFG, s.layout); $('#pc').textContent = POSTS.length; } refreshViews(); $('#st').hidden = true; }catch(e){ $('#st').textContent = 'კავშირი ვერ დამყარდა, ვცდილობ თავიდან…'; $('#st').hidden = false; } };
+  const load = async () => { try{ const s = await api.state(CFG); STATE = s; if(s.layout){ POSTS = groupVariants(arrange(CFG, s.layout)); $('#pc').textContent = POSTS.length; } refreshViews(); $('#st').hidden = true; }catch(e){ $('#st').textContent = 'კავშირი ვერ დამყარდა, ვცდილობ თავიდან…'; $('#st').hidden = false; } };
   await load();
   const tick = () => { if(document.visibilityState === 'visible' && $('#sh').hidden && !sending) load(); };
   setInterval(tick, 10000);
