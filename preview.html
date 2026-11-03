@@ -96,7 +96,7 @@ function renderProfile(){
 }
 function renderGrid(){
   $('#grid').innerHTML = displayOrder(POSTS).map(p => {
-    const n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve').length, 0), s = groupStatus(p);
+    const n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve' && !c.resolved).length, 0), s = groupStatus(p);
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<button type="button" class="tile" data-id="${p.id}" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${badge}
       ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დამტკიცდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}</button>`;
@@ -105,7 +105,7 @@ function renderGrid(){
 function cmHTML(id){
   return commentsOf(id).map(c => c.type === 'approve'
     ? `<div class="cm ok"><b>${esc(c.name)}</b>✓ დაამტკიცა<small>${fmtTime(c.ts)}</small></div>`
-    : `<div class="cm"><b>${esc(c.name)}</b>${esc(c.text)}<small>${c.pending ? 'იგზავნება…' : fmtTime(c.ts)}</small></div>`).join('');
+    : `<div class="cm"><b>${esc(c.name)}</b>${esc(c.text)}<small>${c.pending ? 'იგზავნება…' : fmtTime(c.ts)}${c.resolved ? ' · ✓ გასწორდა' : ''}</small></div>`).join('');
 }
 function capHTML(p){
   const t = p.caption || ''; const short = t.length > 125 || t.split('\n').length > 2;

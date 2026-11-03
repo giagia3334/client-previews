@@ -29,6 +29,9 @@ body.dark .panel p{color:#A99C90}
 .ci{border-left:3px solid #F6C6D8;background:#fff;border-radius:8px;padding:7px 9px;font-size:13px;line-height:1.4;cursor:pointer;color:#2B211C}
 .ci.ok{border-left-color:#E8C547}
 .ci small{display:block;color:#8E6E34;font-size:11.5px}
+.ci.done{border-left-color:#9DC9A9;opacity:.6}
+.fix{appearance:none;border:1px solid #2F6B4A;background:transparent;color:#2F6B4A;font:600 12px inherit;border-radius:8px;padding:3px 8px;margin-top:5px;cursor:pointer}
+.fixed{display:inline-block;margin-top:4px;color:#2F6B4A;font-size:12px;font-weight:600}
 .rm{display:flex;flex-wrap:wrap;gap:6px}
 .rm button{font-size:12.5px;padding:6px 9px}
 .phonecol{display:flex;justify-content:center;position:sticky;top:12px}
@@ -51,7 +54,7 @@ body.dark .panel p{color:#A99C90}
 </style>
 </head>
 <body>
-<div class="mbar"><a class="pbtn" id="mPreview" target="_blank" rel="noopener">კლიენტის ხედი ↗</a><button class="pbtn primary" id="mSync" type="button">📤 Schedule-ში</button><button class="pbtn" id="mPanel" type="button" aria-label="მართვის პანელი">⚙︎</button></div>
+<div class="mbar"><a class="pbtn" id="mPreview" target="_blank" rel="noopener">კლიენტის ხედი ↗</a><button class="pbtn primary" id="mSync" type="button">📤 Schedule-ში</button><a class="pbtn" id="mSched" target="_blank" rel="noopener" hidden aria-label="Posting Schedule">📄</a><button class="pbtn" id="mPanel" type="button" aria-label="მართვის პანელი">⚙︎</button></div>
 <div class="wrapx">
   <aside class="panel" aria-label="მართვა">
     <h1><small id="cname">Studio</small>ინსტაგრამის ფიდი</h1>
@@ -63,6 +66,7 @@ body.dark .panel p{color:#A99C90}
     <button class="pbtn primary" id="syncBtn" type="button">📤 Posting Schedule-ში გადატანა</button>
     <div class="msg" id="msg"></div>
     <div class="seg"><button class="pbtn" type="button" id="themeBtn2">☾ / ☀︎ თემა</button><a class="pbtn" id="previewLink" target="_blank" rel="noopener">კლიენტის ხედი ↗</a></div>
+    <a class="pbtn" id="schedLink" target="_blank" rel="noopener" hidden>📄 Posting Schedule ↗</a>
     <div><div class="lbl">კლიენტის კომენტარები</div><div class="clist" id="clist"><p>ჯერ არ არის.</p></div></div>
     <div id="rmBox" hidden><div class="lbl">წაშლილი პოსტები (დაბრუნება)</div><div class="rm" id="rm"></div></div>
   </aside>
@@ -167,7 +171,7 @@ function renderProfile(){
 }
 function renderGrid(){
   $('#grid').innerHTML = POSTS.map(p => {
-    const s = statusOf(p.id), n = commentsOf(p.id).filter(c => c.type !== 'approve').length;
+    const s = statusOf(p.id), n = commentsOf(p.id).filter(c => c.type !== 'approve' && !c.resolved).length;
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<div class="tile" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="">${badge}
       ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓' : '✎'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}
@@ -177,13 +181,26 @@ function renderGrid(){
 function renderSide(){
   const cs = (STATE.comments || []).slice().reverse();
   const title = id => (CFG.posts.find(p => p.id === id) || {}).title || id;
-  $('#clist').innerHTML = cs.length ? cs.map(c => `<div class="ci${c.type==='approve' ? ' ok' : ''}" data-go="${esc(c.post)}"><small>${esc(title(c.post))} · ${fmtTime(c.ts)}</small><b>${esc(c.name)}:</b> ${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}</div>`).join('') : '<p>ჯერ არ არის.</p>';
+  $('#clist').innerHTML = cs.length ? cs.map(c => `<div class="ci${c.type==='approve' ? ' ok' : ''}${c.resolved ? ' done' : ''}" data-go="${esc(c.post)}"><small>${esc(title(c.post))} · ${fmtTime(c.ts)}</small><b>${esc(c.name)}:</b> ${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}${fixHTML(c)}</div>`).join('') : '<p>ჯერ არ არის.</p>';
   const rm = (LAYOUT.removed || []).filter(id => CFG.posts.some(p => p.id === id));
   $('#rmBox').hidden = !rm.length;
   $('#rm').innerHTML = rm.map(id => `<button type="button" class="pbtn" data-restore="${id}">↩ ${esc(title(id))}</button>`).join('');
 }
 $('#rm').addEventListener('click', e => { const b = e.target.closest('[data-restore]'); if(!b) return; const id = b.dataset.restore; change({t:'restore', id}); renderGrid(); renderSide(); });
-$('#clist').addEventListener('click', e => { const c = e.target.closest('[data-go]'); if(c) openPost(c.dataset.go); });
+$('#clist').addEventListener('click', e => { if(e.target.closest('[data-fix]')) return; const c = e.target.closest('[data-go]'); if(c) openPost(c.dataset.go); });
+/* the team marks a client's change request as done; the client then sees it as fixed */
+function fixHTML(c){
+  if(c.type !== 'comment') return '';
+  return c.resolved ? '<br><span class="fixed">✓ გასწორდა</span>' : `<br><button type="button" class="fix" data-fix="${esc(c.post)}" data-ts="${c.ts}">✓ გასწორდა</button>`;
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-fix]'); if(!b) return;
+  e.stopPropagation();
+  if(!key()){ msg('ჯერ ⚙︎ პანელში ჩაწერე გუნდის კოდი.'); return; }
+  b.disabled = true; b.textContent = 'ინახება…';
+  try{ const r = await api.post(CFG, {action:'resolve', key:key(), post:b.dataset.fix, ts:Number(b.dataset.ts)}); STATE = r.state; document.querySelectorAll(`[data-fix="${b.dataset.fix}"][data-ts="${b.dataset.ts}"]`).forEach(x => x.outerHTML = '<span class="fixed">✓ გასწორდა</span>'); renderSide(); refreshViews(); msg('მონიშნულია: გასწორდა ✓'); }
+  catch(err){ b.disabled = false; b.textContent = '✓ გასწორდა'; msg('ვერ შეინახა: ' + err.message); }
+});
 
 /* grid actions (pointerdown so the drag library never swallows them) */
 $('#grid').addEventListener('pointerdown', e => {
@@ -211,7 +228,7 @@ function renderFeed(){
       : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
     <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
     <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}" contenteditable="true" spellcheck="false">${esc(p.caption)}</span></div>
-    <div class="cmts">${commentsOf(p.id).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}<small>${fmtTime(c.ts)}</small></div>`).join('')}</div>
+    <div class="cmts">${commentsOf(p.id).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
     <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}</div>
   </article>`).join('');
   document.querySelectorAll('#feed .track').forEach(t => {
@@ -254,6 +271,7 @@ $('#syncBtn').onclick = async () => {
 (async () => {
   try{ CFG = await loadConfig(); }catch(e){ msg('კონფიგი ვერ ჩაიტვირთა.'); return; }
   LAYOUT = JSON.parse(JSON.stringify(CFG.defaultLayout || {order:[],pinned:[],removed:[]}));
+  if(CFG.schedule){ $('#schedLink').href = $('#mSched').href = CFG.schedule; $('#schedLink').hidden = $('#mSched').hidden = false; }
   rebuild(); renderProfile(); renderGrid(); renderSide(); initSortable();
   if(!CFG.api){ msg('Apps Script-ის ბმული ჯერ არ არის config.json-ში.'); return; }
   const pull = async (first) => {
