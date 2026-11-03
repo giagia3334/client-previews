@@ -112,10 +112,12 @@ function capHTML(p){
   const cut = short ? t.split('\n').slice(0,2).join('\n').slice(0,120) : t;
   return `<b>${esc(CFG.username)}</b><span class="ct">${esc(cut)}</span>${short ? ` <button type="button" class="more" data-full="${p.id}">… more</button>` : ''}`;
 }
+const isVariant = id => POSTS.some(p => p.variants && p.variants.some(v => v.id === id));
+const okText = (id, done) => isVariant(id) ? (done ? ' ეს ვარიანტი არჩეულია' : ' ამ ვარიანტს ვირჩევ') : (done ? ' დამტკიცებულია' : ' დამტკიცება');
 function apvHTML(p){
   if(p.posted) return '';
   const done = statusOf(p.id) === 'approved';
-  return `<div class="apv"><button type="button" data-ok="${p.id}" class="${done ? 'done' : ''}">${IC.check} ${done ? 'დამტკიცებულია' : 'დამტკიცება'}</button><button type="button" data-cmt="${p.id}">✎ შესაცვლელია</button></div>`;
+  return `<div class="apv"><button type="button" data-ok="${p.id}" class="${done ? 'done' : ''}">${IC.check}${okText(p.id, done)}</button><button type="button" data-cmt="${p.id}">✎ შესაცვლელია</button></div>`;
 }
 function renderFeed(){
   const me = (ls.get('igp_name') || '').trim();
@@ -130,7 +132,7 @@ function renderFeed(){
     <div class="pa">${IC.heart}<button type="button" class="ibtn" data-cmt="${p.id}" aria-label="კომენტარი" style="padding:0">${IC.cmt}</button>${IC.send}<span class="sp"></span>
       ${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
     <div class="cap" data-v="${esc(p.caption)}">${capHTML(p)}</div>
-    ${p.variants ? `<p class="vhint">← → გადაფურცლეთ: ${p.variants.length} ვარიანტი. დაამტკიცეთ ის, რომელიც უფრო მოგწონთ.</p>` : ''}
+    ${p.variants ? `<p class="vhint">← → გადაფურცლეთ: ${p.variants.length} ვარიანტი. აირჩიეთ ის, რომელიც უფრო მოგწონთ.</p>` : ''}
     ${apvHTML(p)}
     <div class="cmts" data-c="${p.id}">${cmHTML(p.id)}</div>
     <button type="button" class="addbtn" data-cmt="${p.id}"><span class="mini">${esc((me || '?').slice(0,1).toUpperCase())}</span>Add a comment…</button>
@@ -164,7 +166,7 @@ function bindFeed(){
       t.querySelectorAll('video').forEach((v,k) => { if(k === i) v.play().catch(()=>{}); else v.pause(); });
       post.querySelectorAll('[data-ok]').forEach(b => b.dataset.ok = s.dataset.v);
       post.querySelectorAll('[data-cmt]').forEach(b => b.dataset.cmt = s.dataset.v);
-      const cm = post.querySelector('.cmts'); cm.dataset.c = s.dataset.v; refreshViews();
+      const cm = post.querySelector('.cmts'); cm.dataset.c = s.dataset.v; if(!$('#fv').hidden) refreshViews();
     }, {passive:true});
   });
 }
@@ -174,7 +176,7 @@ function openPost(id){
 }
 function openReelViewer(id){
   document.querySelectorAll('#feed video').forEach(v => v.pause());
-  openReels($('#app'), {posts: flatVariants(displayOrder(POSTS)), startId: id, username: CFG.username, statusOf,
+  openReels($('#app'), {posts: displayOrder(POSTS), startId: id, username: CFG.username, statusOf,
     onComment: id => openSheet(id), onApprove: (id, btn) => approve(id, btn)});
 }
 $('#grid').addEventListener('click', e => { const t = e.target.closest('.tile'); if(t) openPost(t.dataset.id); });
@@ -223,13 +225,13 @@ $('#shf').onsubmit = e => {
     });
 };
 async function approve(id, btn){
-  if(statusOf(id) === 'approved'){ toast('ეს პოსტი უკვე დამტკიცებულია.'); return; }
+  if(statusOf(id) === 'approved'){ toast(isVariant(id) ? 'ეს ვარიანტი უკვე არჩეულია.' : 'ეს პოსტი უკვე დამტკიცებულია.'); return; }
   let name = (ls.get('igp_name') || '').trim();
   if(!name){ name = (prompt('თქვენი სახელი') || '').trim(); if(!name) return; ls.set('igp_name', name); }
   const prev = statusOf(id), local = {ts: Date.now(), post: id, name, type: 'approve', text: '', pending: true};
   STATE.comments = [...(STATE.comments || []), local]; STATE.status = {...(STATE.status || {}), [id]: 'approved'};
-  refreshViews(); toast('დამტკიცდა ✓');
-  if(btn && btn.closest('.rv-btn')) btn.querySelector('small').textContent = 'დამტკიცდა';
+  refreshViews(); toast(isVariant(id) ? 'ვარიანტი არჩეულია ✓' : 'დამტკიცდა ✓');
+  if(btn && btn.closest('.rv-btn')) btn.querySelector('small').textContent = isVariant(id) ? 'არჩეულია' : 'დამტკიცდა';
   sending++;
   try{ const r = await api.post(CFG, {action:'approve', post: id, name}); STATE = r.state || STATE; refreshViews(); }
   catch(err){ STATE.comments = STATE.comments.filter(c => c !== local); STATE.status[id] = prev; refreshViews(); toast('დამტკიცება ვერ გაიგზავნა. სცადეთ თავიდან.'); }
@@ -241,7 +243,7 @@ function refreshViews(){
     document.querySelectorAll('.cmts').forEach(el => el.innerHTML = cmHTML(el.dataset.c));
     // captions edited in the studio show up without reopening the post
     document.querySelectorAll('#feed .post').forEach(el => { const p = POSTS.find(x => 'post-' + x.id === el.id), c = el.querySelector('.cap'); if(p && c && c.dataset.v !== p.caption){ c.dataset.v = p.caption; c.innerHTML = capHTML(p); } });
-    document.querySelectorAll('[data-ok]').forEach(b => { const d = statusOf(b.dataset.ok) === 'approved'; b.classList.toggle('done', d); b.innerHTML = IC.check + (d ? ' დამტკიცებულია' : ' დამტკიცება'); });
+    document.querySelectorAll('[data-ok]').forEach(b => { const d = statusOf(b.dataset.ok) === 'approved'; b.classList.toggle('done', d); b.innerHTML = IC.check + okText(b.dataset.ok, d); });
   }
 }
 

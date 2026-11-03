@@ -120,7 +120,11 @@ $('#keySave').onclick = async () => {
 };
 
 function cloneLayout(){ return JSON.parse(JSON.stringify(LAYOUT)); }
-function rebuild(){ POSTS = arrange(CFG, LAYOUT); $('#pc').textContent = POSTS.length; }
+function rebuild(){ POSTS = groupVariants(arrange(CFG, LAYOUT)); $('#pc').textContent = POSTS.length; }
+/* versions of one video share one tile: an action on the tile applies to all of them */
+const idsOf = p => (p.variants || [p]).map(v => v.id);
+const groupOf = id => POSTS.find(p => idsOf(p).includes(id));
+function groupStatus(p){ const s = idsOf(p).map(statusOf); return s.includes('approved') ? 'approved' : s.includes('changes') ? 'changes' : ''; }
 
 /* Every edit is a small operation sent to the sheet, which applies it to the shared layout
    under a lock, so two people editing at once never undo each other. */
@@ -171,7 +175,7 @@ function renderProfile(){
 }
 function renderGrid(){
   $('#grid').innerHTML = POSTS.map(p => {
-    const s = statusOf(p.id), n = commentsOf(p.id).filter(c => c.type !== 'approve' && !c.resolved).length;
+    const s = groupStatus(p), n = idsOf(p).reduce((k, id) => k + commentsOf(id).filter(c => c.type !== 'approve' && !c.resolved).length, 0);
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<div class="tile" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="">${badge}
       ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓' : '✎'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}
@@ -206,16 +210,16 @@ document.addEventListener('click', async e => {
 $('#grid').addEventListener('pointerdown', e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   e.preventDefault(); e.stopPropagation();
-  const id = b.closest('.tile').dataset.id;
-  if(b.dataset.act === 'pin'){ const on = !(LAYOUT.pinned || []).includes(id); change({t:'pin', id, on}); }
-  if(b.dataset.act === 'del'){ change({t:'remove', id}); toast('პოსტი ამოღებულია. პანელიდან დააბრუნებ.'); }
+  const id = b.closest('.tile').dataset.id, ids = idsOf(groupOf(id));
+  if(b.dataset.act === 'pin'){ const on = !(LAYOUT.pinned || []).includes(id); ids.forEach(x => change({t:'pin', id: x, on})); }
+  if(b.dataset.act === 'del'){ ids.forEach(x => change({t:'remove', id: x})); toast('პოსტი ამოღებულია. პანელიდან დააბრუნებ.'); }
   renderGrid(); renderSide();
 }, true);
 $('#grid').addEventListener('click', e => { if(e.target.closest('[data-act]')) return; const t = e.target.closest('.tile'); if(t) openPost(t.dataset.id); });
 function initSortable(){
   if(!window.Sortable) return;
   Sortable.create($('#grid'), { animation:160, delay:220, delayOnTouchOnly:true, filter:'.tools', preventOnFilter:false,
-    onEnd(){ const order = [...$('#grid').children].map(c => c.dataset.id); change({t:'order', order}); renderGrid(); } });
+    onEnd(){ const order = [...$('#grid').children].flatMap(c => idsOf(groupOf(c.dataset.id))); change({t:'order', order}); renderGrid(); } });
 }
 
 /* feed with editable captions */
@@ -223,12 +227,14 @@ function renderFeed(){
   $('#feed').innerHTML = POSTS.map(p => `
   <article class="post" id="post-${p.id}">
     <div class="ph"><span class="mini"><img src="${mediaUrl(CFG.avatar)}" alt=""></span><b>${esc(CFG.username)}</b>${IC.dots}</div>
-    <div class="media">${p.video
+    <div class="media">${p.variants
+      ? `<div class="track" data-n="${p.variants.length}">${p.variants.map((v,i) => `<div data-v="${v.id}" style="flex:0 0 100%;position:relative;scroll-snap-align:start"><video src="${mediaUrl(v.video)}" poster="${mediaUrl(v.media[0])}" playsinline muted loop preload="none"></video><span class="playov">${IC.play}</span><span style="position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);color:#fff;font-size:12px;font-weight:600;padding:3px 8px;border-radius:12px">ვარიანტი ${i+1}</span></div>`).join('')}</div><span class="cnt">1/${p.variants.length}</span>`
+      : p.video
       ? `<video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute">${IC.muted}</button><span class="playov">${IC.play}</span>`
       : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
-    <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
+    <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
     <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}" contenteditable="true" spellcheck="false">${esc(p.caption)}</span></div>
-    <div class="cmts">${commentsOf(p.id).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
+    <div class="cmts">${idsOf(p).flatMap(id => commentsOf(id).map(c => ({...c, vi: p.variants ? idsOf(p).indexOf(id) + 1 : 0}))).sort((a, b) => a.ts - b.ts).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.vi ? `[ვარიანტი ${c.vi}] ` : ''}${c.type==='approve' ? (c.vi ? '✓ აირჩია' : '✓ დაამტკიცა') : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
     <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}</div>
   </article>`).join('');
   document.querySelectorAll('#feed .track').forEach(t => {
@@ -239,15 +245,15 @@ function renderFeed(){
 }
 $('#feed').addEventListener('input', e => {
   const el = e.target.closest('[data-cap]'); if(!el) return;
-  const id = el.dataset.cap, txt = el.innerText.replace(/\n$/, ''); change({t:'caption', id, text: txt});
+  const txt = el.innerText.replace(/\n$/, ''); idsOf(groupOf(el.dataset.cap)).forEach(id => change({t:'caption', id, text: txt}));
 });
 $('#feed').addEventListener('click', e => {
   const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
-  const vid = e.target.closest('video'); if(vid) openReelsView(vid.closest('.post').id.slice(5));
+  const vid = e.target.closest('video'); if(vid){ const w = vid.closest('[data-v]'); openReelsView(w ? w.dataset.v : vid.closest('.post').id.slice(5)); }
 });
 function openReelsView(id){ document.querySelectorAll('#feed video').forEach(v => v.pause()); openReels($('#app'), {posts: displayOrder(POSTS), startId: id, username: CFG.username}); }
 function openPost(id){
-  const p = POSTS.find(x => x.id === id); if(!p) return;
+  const p = groupOf(id); if(!p) return; id = p.id;
   renderFeed(); $('#pv').hidden = true; $('#fv').hidden = false;
   const el = document.getElementById('post-' + id); $('#fv').scrollTop = el ? el.offsetTop - 50 : 0;
 }
@@ -257,7 +263,7 @@ $('#back').onclick = () => { $('#fv').hidden = true; $('#pv').hidden = false; re
 $('#syncBtn').onclick = async () => {
   if(!key()){ msg('ჯერ ჩაწერე გუნდის კოდი.'); return; }
   const btn = $('#syncBtn'); btn.disabled = true; msg('Posting Schedule ახლდება… (ფაილების ატვირთვას შეიძლება 1 წუთი დასჭირდეს)');
-  const posts = POSTS.map(p => ({id:p.id, title:p.title, caption:p.caption, match:p.match || '', posted:!!p.posted, postType:p.postType,
+  const posts = flatVariants(POSTS).map(p => ({id:p.id, title:p.title, caption:p.caption, match:p.match || '', posted:!!p.posted, postType:p.postType,
     video: p.video ? p.video : '', count: p.video ? 1 : p.media.length, drive: p.drive || '', files: p.video ? [p.video] : p.media}));
   try{
     const r = await api.post(CFG, {action:'sync', key:key(), layout: LAYOUT, posts, baseUrl: new URL(BASE + 'media/', location.href).href});

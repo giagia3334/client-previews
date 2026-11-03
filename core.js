@@ -93,36 +93,44 @@ const IC = {
 const fmtTime = ts => { try{ return new Date(ts).toLocaleString('ka-GE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } };
 
 /* Fullscreen vertical reels viewer, shared by both pages.
+   Posts with versions ("variants") swipe sideways inside one reel.
    One <video> element is reused for every reel: phones load only the reel on screen,
    and once the first tap starts it with sound, iOS keeps sound for the next reels.
    opts: {posts, startId, onComment(id), onApprove(id), statusOf(id)} */
 function openReels(root, opts){
-  const reels = opts.posts.filter(p => p.video);
-  const start = Math.max(0, reels.findIndex(p => p.id === opts.startId));
+  const reels = opts.posts.filter(p => p.video || p.variants);
+  const startAt = reels.findIndex(p => (p.variants || [p]).some(v => v.id === opts.startId));
+  const start = Math.max(0, startAt);
   const fill = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#000';
+  const okLabel = (id, many) => opts.statusOf && opts.statusOf(id) === 'approved' ? (many ? 'არჩეულია' : 'დამტკიცდა') : (many ? 'ამას ვირჩევ' : 'დამტკიცება');
   const wrap = document.createElement('div');
   wrap.className = 'reelv';
   wrap.innerHTML = `<button type="button" class="rv-close" aria-label="დახურვა">${IC.close}</button>
-    <div class="rv-list">${reels.map(p => `
-      <section class="rv-item" data-id="${p.id}">
-        <img class="rv-poster" src="${mediaUrl(p.media[0])}" alt="" style="${fill}">
+    <div class="rv-list">${reels.map(g => { const vs = g.variants || [g], many = vs.length > 1; return `
+      <section class="rv-item" data-id="${g.id}">
+        <div class="rv-h" style="position:absolute;inset:0;display:flex;overflow-x:${many ? 'auto' : 'hidden'};scroll-snap-type:x mandatory;scrollbar-width:none">
+          ${vs.map(v => `<div class="rv-slide" data-id="${v.id}" style="position:relative;flex:0 0 100%;height:100%;scroll-snap-align:start"><img src="${mediaUrl(v.media[0])}" alt="" style="${fill}"></div>`).join('')}
+        </div>
+        ${many ? `<div class="rv-var" style="position:absolute;top:18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:12px;pointer-events:none">ვარიანტი 1/${vs.length} · ← →</div>` : ''}
         <span class="rv-play" hidden>${IC.play}</span>
         <div class="rv-side">
           ${opts.onComment ? `<button type="button" class="rv-btn" data-act="cmt" aria-label="კომენტარი">${IC.cmt.replace('currentColor','#fff')}<small>კომენტარი</small></button>` : ''}
-          ${opts.onApprove ? `<button type="button" class="rv-btn" data-act="ok" aria-label="დამტკიცება">${IC.check}<small>${opts.statusOf && opts.statusOf(p.id)==='approved' ? 'დამტკიცდა' : 'დამტკიცება'}</small></button>` : ''}
+          ${opts.onApprove ? `<button type="button" class="rv-btn" data-act="ok" aria-label="დამტკიცება">${IC.check}<small>${okLabel(vs[0].id, many)}</small></button>` : ''}
           <button type="button" class="rv-btn" data-act="mute" aria-label="ხმა">${IC.sound}<small>ხმა</small></button>
         </div>
-        <div class="rv-cap"><b>${esc(opts.username || '')}</b><span>${esc((p.caption||'').split('\n').slice(0,3).join('\n'))}</span></div>
-      </section>`).join('')}</div>`;
+        <div class="rv-cap"><b>${esc(opts.username || '')}</b><span>${esc((g.caption||'').split('\n').slice(0,3).join('\n'))}</span></div>
+      </section>`; }).join('')}</div>`;
   root.appendChild(wrap);
   const list = wrap.querySelector('.rv-list');
   const items = [...wrap.querySelectorAll('.rv-item')];
+  const byId = Object.fromEntries(reels.flatMap(g => g.variants || [g]).map(v => [v.id, v]));
   const vid = document.createElement('video');
   vid.playsInline = true; vid.loop = true; vid.preload = 'auto'; vid.setAttribute('playsinline', '');
   vid.style.cssText = fill;
   let muted = false, cur = null;
   const setMuteIcons = () => wrap.querySelectorAll('[data-act=mute]').forEach(x => x.firstElementChild.outerHTML = muted ? IC.muted : IC.sound);
-  const overlay = () => cur && (cur.querySelector('.rv-play').hidden = !vid.paused);
+  const item = () => cur && cur.closest('.rv-item');
+  const overlay = () => item() && (item().querySelector('.rv-play').hidden = !vid.paused);
   vid.addEventListener('pause', overlay); vid.addEventListener('play', overlay);
   function play(){
     vid.muted = muted;
@@ -130,29 +138,40 @@ function openReels(root, opts){
     // the phone refused sound without a tap: keep playing muted and show it
     if(p) p.catch(() => { muted = true; vid.muted = true; setMuteIcons(); vid.play().catch(() => {}); });
   }
-  function activate(item){
-    if(cur === item) return;
-    cur = item; const p = reels[items.indexOf(item)];
-    vid.pause(); item.insertBefore(vid, item.querySelector('.rv-play'));
-    vid.poster = mediaUrl(p.media[0]); vid.src = mediaUrl(p.video);
+  function activate(slide){
+    if(cur === slide) return;
+    cur = slide; const v = byId[slide.dataset.id];
+    vid.pause(); slide.appendChild(vid);
+    vid.poster = mediaUrl(v.media[0]); vid.src = mediaUrl(v.video);
+    const it = slide.closest('.rv-item'), slides = [...it.querySelectorAll('.rv-slide')], i = slides.indexOf(slide);
+    const lab = it.querySelector('.rv-var'); if(lab) lab.textContent = `ვარიანტი ${i + 1}/${slides.length}` + (slides.length > 1 ? ' · ← →' : '');
+    const ok = it.querySelector('[data-act=ok] small'); if(ok) ok.textContent = okLabel(v.id, slides.length > 1);
     play();
   }
-  activate(items[start]);   // still inside the opening tap, so sound is allowed
-  const io = new IntersectionObserver(es => es.forEach(en => { if(en.isIntersecting && en.intersectionRatio > .6) activate(en.target); }), {root: list, threshold:[0,.6,1]});
-  items.forEach(s => io.observe(s));
-  requestAnimationFrame(() => { list.scrollTop = start * list.clientHeight; });
+  // still inside the opening tap, so sound is allowed
+  const first = items[start].querySelector(`.rv-slide[data-id="${opts.startId}"]`) || items[start].querySelector('.rv-slide');
+  activate(first);
+  const io = new IntersectionObserver(es => es.forEach(en => { if(en.isIntersecting && en.intersectionRatio > .6) activate(en.target); }), {threshold:[0,.6,1]});
+  wrap.querySelectorAll('.rv-slide').forEach(s => io.observe(s));
+  requestAnimationFrame(() => {
+    list.scrollTop = start * list.clientHeight;
+    const h = first.parentNode; h.scrollLeft = first.offsetLeft;
+  });
   const close = () => { io.disconnect(); vid.pause(); vid.removeAttribute('src'); vid.load(); wrap.remove(); };
   wrap.addEventListener('click', e => {
     if(e.target.closest('.rv-close')){ close(); return; }
-    const b = e.target.closest('.rv-btn'); const item = e.target.closest('.rv-item');
-    if(b && item){
-      const id = item.dataset.id;
+    const b = e.target.closest('.rv-btn'), it = e.target.closest('.rv-item');
+    if(b && it){
+      const id = it === item() ? cur.dataset.id : it.querySelector('.rv-slide').dataset.id;
       if(b.dataset.act === 'mute'){ muted = !muted; vid.muted = muted; setMuteIcons(); if(vid.paused) play(); }
       if(b.dataset.act === 'cmt' && opts.onComment) opts.onComment(id);
       if(b.dataset.act === 'ok' && opts.onApprove) opts.onApprove(id, b);
       return;
     }
-    if(item && !e.target.closest('.rv-cap')){ if(item !== cur) activate(item); else if(vid.paused) play(); else vid.pause(); }
+    if(it && !e.target.closest('.rv-cap')){
+      const sl = e.target.closest('.rv-slide');
+      if(sl && sl !== cur) activate(sl); else if(vid.paused) play(); else vid.pause();
+    }
   });
   document.addEventListener('keydown', function k(e){ if(e.key === 'Escape'){ close(); document.removeEventListener('keydown', k); } });
   return close;
