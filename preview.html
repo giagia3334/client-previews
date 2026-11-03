@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ka">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Instagram preview</title>
+<link rel="stylesheet" href="ig.css">
+<style>
+.stage{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 12px 28px;gap:12px}
+.note{max-width:430px;font-size:13.5px;line-height:1.45;color:#5A4E45;text-align:center;margin:0}
+body.dark .note{color:#B3A595}
+@media (max-width:520px){
+  body{background:var(--bg)}
+  .stage{padding:0;justify-content:flex-start}
+  .note{display:none}
+  .app{width:100%;height:100vh;height:100dvh;border-radius:0;box-shadow:none}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <p class="note">ასე გამოჩნდება ინსტაგრამი ახალი პოსტების შემდეგ. დააჭირეთ პოსტს, ნახეთ ტექსტი და ვიდეო. თითოეულ პოსტზე დააჭირეთ „დამტკიცება“-ს, ან დაწერეთ კომენტარი, თუ რამე შესაცვლელია. ☾/☀︎ ღილაკით ღია და მუქი რეჟიმი ირთვება.</p>
+  <div class="app" id="app">
+    <div class="view" id="pv">
+      <div class="nav">
+        <div class="uname" id="uname"></div>
+        <button class="ibtn" id="themeBtn" type="button" aria-label="ღია / მუქი რეჟიმი"></button>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+      </div>
+      <div class="prof">
+        <div class="av"><img id="av" alt=""></div>
+        <div class="pinfo">
+          <span class="dname" id="dname"></span>
+          <div class="stats">
+            <div class="stat"><b id="pc">0</b><span>posts</span></div>
+            <div class="stat"><b id="fol"></b><span>followers</span></div>
+            <div class="stat"><b id="fng"></b><span>following</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bio" id="bio"></div>
+      <div class="acts"><span>Follow</span><span>Message</span></div>
+      <div class="tabs" aria-hidden="true">
+        <span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg></span>
+        <span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3 8h18M8.5 3l3 5M14 3l3 5"/><path d="m10 11.5 4.5 2.6-4.5 2.6z" fill="currentColor"/></svg></span>
+        <span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 4h16v13.5h-5L12 20.5 9 17.5H4z"/><circle cx="12" cy="9.3" r="2.6"/><path d="M7.6 15.5a4.8 4.8 0 0 1 8.8 0"/></svg></span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <div class="view" id="fv" hidden>
+      <div class="ptop">
+        <button class="ibtn" id="back" type="button" aria-label="უკან"></button>
+        <div class="t"><small id="pvUser"></small><b>Posts</b></div>
+      </div>
+      <div id="feed"></div>
+    </div>
+    <div class="sheet" id="sh" hidden>
+      <form id="shf">
+        <div class="sh"><img id="shimg" alt=""><div><b>კომენტარი პოსტზე</b><span id="shcap"></span></div></div>
+        <label>თქვენი სახელი<input id="shname" maxlength="40" autocomplete="name" placeholder="მაგ. მზია" required></label>
+        <label>კომენტარი<textarea id="shtext" placeholder="რა შევცვალოთ?" required></textarea></label>
+        <div class="row"><button type="button" class="no" id="shno">გაუქმება</button><button type="submit" class="ok" id="shok">გაგზავნა</button></div>
+      </form>
+    </div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <div class="status" id="st" hidden></div>
+  </div>
+</div>
+<script src="core.js"></script>
+<script>
+let CFG = null, POSTS = [], STATE = {comments:[], status:{}}, pendingApprove = null;
+const commentsOf = id => (STATE.comments || []).filter(c => c.post === id);
+const statusOf = id => (STATE.status || {})[id] || '';
+
+function setTheme(t){ document.body.classList.toggle('dark', t==='dark'); $('#themeBtn').innerHTML = t==='dark' ? IC.sun : IC.moon; ls.set('igp_theme', t); }
+setTheme(ls.get('igp_theme') || 'light');
+$('#themeBtn').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
+$('#back').innerHTML = IC.back;
+
+let toastT;
+function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3500); }
+
+function renderProfile(){
+  $('#uname').textContent = CFG.username; $('#pvUser').textContent = CFG.username;
+  $('#dname').textContent = CFG.displayName; $('#bio').textContent = CFG.bio;
+  $('#fol').textContent = CFG.followers; $('#fng').textContent = CFG.following;
+  $('#av').src = mediaUrl(CFG.avatar); $('#pc').textContent = POSTS.length;
+  document.title = CFG.username + ' · preview';
+}
+function renderGrid(){
+  $('#grid').innerHTML = displayOrder(POSTS).map(p => {
+    const n = commentsOf(p.id).filter(c => c.type !== 'approve').length, s = statusOf(p.id);
+    const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
+    return `<button type="button" class="tile" data-id="${p.id}" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${badge}
+      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓ დამტკიცდა' : 'შესაცვლელი'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}</button>`;
+  }).join('');
+}
+function cmHTML(id){
+  return commentsOf(id).map(c => c.type === 'approve'
+    ? `<div class="cm ok"><b>${esc(c.name)}</b>✓ დაამტკიცა<small>${fmtTime(c.ts)}</small></div>`
+    : `<div class="cm"><b>${esc(c.name)}</b>${esc(c.text)}<small>${fmtTime(c.ts)}</small></div>`).join('');
+}
+function capHTML(p){
+  const t = p.caption || ''; const short = t.length > 125 || t.split('\n').length > 2;
+  const cut = short ? t.split('\n').slice(0,2).join('\n').slice(0,120) : t;
+  return `<b>${esc(CFG.username)}</b><span class="ct">${esc(cut)}</span>${short ? ` <button type="button" class="more" data-full="${p.id}">… more</button>` : ''}`;
+}
+function apvHTML(p){
+  if(p.posted) return '';
+  const done = statusOf(p.id) === 'approved';
+  return `<div class="apv"><button type="button" data-ok="${p.id}" class="${done ? 'done' : ''}">${IC.check} ${done ? 'დამტკიცებულია' : 'დამტკიცება'}</button><button type="button" data-cmt="${p.id}">✎ შესაცვლელია</button></div>`;
+}
+function renderFeed(){
+  const me = (ls.get('igp_name') || '').trim();
+  $('#feed').innerHTML = displayOrder(POSTS).map(p => `
+  <article class="post" id="post-${p.id}">
+    <div class="ph"><span class="mini"><img src="${mediaUrl(CFG.avatar)}" alt=""></span><b>${esc(CFG.username)}</b>${IC.dots}</div>
+    <div class="media">${p.video
+      ? `<video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute" aria-label="ხმა">${IC.muted}</button><span class="playov">${IC.play}</span>`
+      : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
+    <div class="pa">${IC.heart}<button type="button" class="ibtn" data-cmt="${p.id}" aria-label="კომენტარი" style="padding:0">${IC.cmt}</button>${IC.send}<span class="sp"></span>
+      ${p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
+    <div class="cap">${capHTML(p)}</div>
+    ${apvHTML(p)}
+    <div class="cmts" data-c="${p.id}">${cmHTML(p.id)}</div>
+    <button type="button" class="addbtn" data-cmt="${p.id}"><span class="mini">${esc((me || '?').slice(0,1).toUpperCase())}</span>Add a comment…</button>
+    <div class="pdate">${p.posted ? 'უკვე გამოქვეყნებული' : 'დაგეგმილი პოსტი'}</div>
+  </article>`).join('');
+  bindFeed();
+}
+let io = null;
+function bindFeed(){
+  if(io) io.disconnect();
+  io = new IntersectionObserver(es => es.forEach(en => { const v = en.target; if(en.isIntersecting && en.intersectionRatio > .6) v.play().catch(()=>{}); else v.pause(); }), {root: $('#fv'), threshold:[0,.6,1]});
+  document.querySelectorAll('#feed video').forEach(v => {
+    io.observe(v); const ov = v.parentNode.querySelector('.playov');
+    v.addEventListener('play', () => ov.hidden = true); v.addEventListener('pause', () => ov.hidden = false);
+  });
+  document.querySelectorAll('#feed .track').forEach(t => {
+    const post = t.closest('.post'), dots = post.querySelectorAll('.dots i'), cnt = post.querySelector('.cnt');
+    t.addEventListener('scroll', () => { const i = Math.round(t.scrollLeft / t.clientWidth); dots.forEach((d,k) => d.classList.toggle('on', k === i)); if(cnt) cnt.textContent = (i+1) + '/' + t.dataset.n; }, {passive:true});
+  });
+}
+function openPost(id){
+  const p = POSTS.find(x => x.id === id);
+  if(p && p.video){ openReelViewer(id); return; }
+  renderFeed(); $('#pv').hidden = true; $('#fv').hidden = false;
+  const el = document.getElementById('post-' + id); $('#fv').scrollTop = el ? el.offsetTop - 50 : 0;
+}
+function openReelViewer(id){
+  document.querySelectorAll('#feed video').forEach(v => v.pause());
+  openReels($('#app'), {posts: displayOrder(POSTS), startId: id, username: CFG.username, statusOf,
+    onComment: id => openSheet(id), onApprove: (id, btn) => approve(id, btn)});
+}
+$('#grid').addEventListener('click', e => { const t = e.target.closest('.tile'); if(t) openPost(t.dataset.id); });
+$('#back').onclick = () => { document.querySelectorAll('#feed video').forEach(v => v.pause()); $('#fv').hidden = true; $('#pv').hidden = false; renderGrid(); };
+$('#feed').addEventListener('click', e => {
+  const m = e.target.closest('.more'); if(m){ const p = POSTS.find(x => x.id === m.dataset.full); m.parentNode.querySelector('.ct').textContent = p.caption; m.remove(); return; }
+  const c = e.target.closest('[data-cmt]'); if(c){ openSheet(c.dataset.cmt); return; }
+  const ok = e.target.closest('[data-ok]'); if(ok){ approve(ok.dataset.ok, ok); return; }
+  const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
+  const vid = e.target.closest('video'); if(vid){ openReelViewer(vid.closest('.post').id.slice(5)); }
+});
+
+/* comment / approve */
+let shPost = null, shMode = 'comment';
+function openSheet(id){
+  const p = POSTS.find(x => x.id === id); shPost = id;
+  $('#shimg').src = mediaUrl(p.media[0]);
+  $('#shcap').textContent = p.title || (p.caption || '').split('\n')[0];
+  $('#shname').value = ls.get('igp_name') || '';
+  $('#shtext').value = '';
+  $('#sh').hidden = false;
+  setTimeout(() => ($('#shname').value ? $('#shtext') : $('#shname')).focus({preventScroll:true}), 60);
+}
+const closeSheet = () => { $('#sh').hidden = true; shPost = null; };
+$('#shno').onclick = closeSheet;
+$('#sh').addEventListener('click', e => { if(e.target.id === 'sh') closeSheet(); });
+$('#shf').onsubmit = async e => {
+  e.preventDefault();
+  const name = $('#shname').value.trim(), text = $('#shtext').value.trim(); if(!name || !text) return;
+  ls.set('igp_name', name); $('#shok').disabled = true;
+  try{
+    const r = await api.post(CFG, {action:'comment', post: shPost, name, text});
+    STATE = r.state || STATE; closeSheet(); refreshViews(); toast('კომენტარი გაიგზავნა, მადლობა!');
+  }catch(err){ toast('ვერ გაიგზავნა. შეამოწმეთ ინტერნეტი და სცადეთ თავიდან.'); }
+  $('#shok').disabled = false;
+};
+async function approve(id, btn){
+  if(statusOf(id) === 'approved'){ toast('ეს პოსტი უკვე დამტკიცებულია.'); return; }
+  let name = (ls.get('igp_name') || '').trim();
+  if(!name){ name = (prompt('თქვენი სახელი') || '').trim(); if(!name) return; ls.set('igp_name', name); }
+  if(btn) btn.disabled = true;
+  try{
+    const r = await api.post(CFG, {action:'approve', post: id, name});
+    STATE = r.state || STATE; refreshViews(); toast('დამტკიცდა ✓');
+    if(btn && btn.closest('.rv-btn')) btn.querySelector('small').textContent = 'დამტკიცდა';
+  }catch(err){ toast('ვერ გაიგზავნა. სცადეთ თავიდან.'); }
+  if(btn) btn.disabled = false;
+}
+function refreshViews(){
+  if($('#fv').hidden) renderGrid();
+  else {
+    document.querySelectorAll('.cmts').forEach(el => el.innerHTML = cmHTML(el.dataset.c));
+    document.querySelectorAll('[data-ok]').forEach(b => { const d = statusOf(b.dataset.ok) === 'approved'; b.classList.toggle('done', d); b.innerHTML = IC.check + (d ? ' დამტკიცებულია' : ' დამტკიცება'); });
+  }
+}
+
+/* boot */
+(async () => {
+  try{ CFG = await loadConfig(); }catch(e){ $('#st').textContent = 'გვერდი ვერ ჩაიტვირთა.'; $('#st').hidden = false; return; }
+  POSTS = arrange(CFG, null); renderProfile(); renderGrid();
+  if(!CFG.api){ return; }
+  const load = async () => { try{ const s = await api.state(CFG); STATE = s; if(s.layout){ POSTS = arrange(CFG, s.layout); $('#pc').textContent = POSTS.length; } refreshViews(); $('#st').hidden = true; }catch(e){ $('#st').textContent = 'კავშირი ვერ დამყარდა, ვცდილობ თავიდან…'; $('#st').hidden = false; } };
+  await load();
+  setInterval(() => { if(document.visibilityState === 'visible' && $('#sh').hidden) load(); }, 20000);
+})();
+</script>
+</body>
+</html>

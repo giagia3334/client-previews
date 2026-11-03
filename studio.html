@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ka">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Studio · Instagram feed</title>
+<link rel="stylesheet" href="ig.css">
+<style>
+body{padding:16px}
+.wrapx{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:330px minmax(0,1fr);gap:26px;align-items:start}
+@media (max-width:860px){.wrapx{grid-template-columns:minmax(0,1fr)}.phonecol{order:-1}body{padding:0 0 20px}}
+.panel{background:#F7F3EE;border:1px solid #D9CFC4;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;color:#2B211C;font-family:"Noto Sans Georgian",-apple-system,sans-serif}
+body.dark .panel{background:#1E1915;border-color:#3A312A;color:#F1EBE3}
+.panel h1{margin:0;font-size:20px}
+.panel h1 small{display:block;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:#8E6E34;margin-bottom:4px}
+.panel p{margin:0;font-size:13.5px;line-height:1.5;color:#6E6258}
+body.dark .panel p{color:#A99C90}
+.pbtn{appearance:none;border:1px solid #D9CFC4;background:transparent;color:inherit;font:600 14px inherit;padding:10px 14px;border-radius:10px;cursor:pointer;text-align:center}
+.pbtn.primary{background:#C4A061;border-color:#C4A061;color:#2B211C}
+.pbtn:disabled{opacity:.55;cursor:default}
+.seg{display:flex;gap:6px}
+.seg .pbtn{flex:1}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#6E6258}
+.keyrow{display:flex;gap:6px}
+.keyrow input{flex:1;min-width:0;border:1px solid #D9CFC4;border-radius:10px;padding:9px 10px;font:14px inherit;background:#fff}
+.msg{font-size:13px;line-height:1.45;min-height:18px}
+.clist{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
+.ci{border-left:3px solid #F6C6D8;background:#fff;border-radius:8px;padding:7px 9px;font-size:13px;line-height:1.4;cursor:pointer;color:#2B211C}
+.ci.ok{border-left-color:#E8C547}
+.ci small{display:block;color:#8E6E34;font-size:11.5px}
+.rm{display:flex;flex-wrap:wrap;gap:6px}
+.rm button{font-size:12.5px;padding:6px 9px}
+.phonecol{display:flex;justify-content:center;position:sticky;top:12px}
+@media (max-width:860px){.phonecol{position:static}.app{width:100%;height:100vh;height:100dvh;border-radius:0;box-shadow:none}}
+.tools{position:absolute;left:4px;right:4px;bottom:4px;display:flex;gap:4px}
+.tools button{flex:1;height:26px;border:0;border-radius:7px;background:rgba(18,14,11,.72);color:#fff;display:grid;place-items:center;cursor:pointer;padding:0;font-size:13px}
+.tools button[aria-pressed="true"]{background:#C4A061;color:#2B211C}
+@media (hover:hover){.tile .tools{display:none}.tile:hover .tools{display:flex}}
+.sortable-ghost{opacity:.35}
+.cap [contenteditable]{outline:none}
+.cap [contenteditable]:focus{background:rgba(196,160,97,.15)}
+</style>
+</head>
+<body>
+<div class="wrapx">
+  <aside class="panel" aria-label="მართვა">
+    <h1><small id="cname">Studio</small>ინსტაგრამის ფიდი</h1>
+    <p>პოსტები გადაათრიე ადგილზე, პოსტის გახსნისას ტექსტი პირდაპირ შეცვალე. ცვლილებები ყველა მოწყობილობაზე ჩანს. როცა რიგი მზადაა, დააჭირე ქვედა ღილაკს და Posting Schedule განახლდება.</p>
+    <div>
+      <div class="lbl">გუნდის კოდი</div>
+      <div class="keyrow"><input id="key" type="password" autocomplete="off" placeholder="კოდი (მხოლოდ ერთხელ)"><button class="pbtn" id="keySave" type="button">შენახვა</button></div>
+    </div>
+    <button class="pbtn primary" id="syncBtn" type="button">📤 Posting Schedule-ში გადატანა</button>
+    <div class="msg" id="msg"></div>
+    <div class="seg"><button class="pbtn" type="button" id="themeBtn2">☾ / ☀︎ თემა</button><a class="pbtn" id="previewLink" target="_blank" rel="noopener">კლიენტის ხედი ↗</a></div>
+    <div><div class="lbl">კლიენტის კომენტარები</div><div class="clist" id="clist"><p>ჯერ არ არის.</p></div></div>
+    <div id="rmBox" hidden><div class="lbl">წაშლილი პოსტები (დაბრუნება)</div><div class="rm" id="rm"></div></div>
+  </aside>
+  <div class="phonecol">
+    <div class="app" id="app">
+      <div class="view" id="pv">
+        <div class="nav"><div class="uname" id="uname"></div><button class="ibtn" id="themeBtn" type="button" aria-label="თემა"></button></div>
+        <div class="prof">
+          <div class="av"><img id="av" alt=""></div>
+          <div class="pinfo"><span class="dname" id="dname"></span>
+            <div class="stats"><div class="stat"><b id="pc">0</b><span>posts</span></div><div class="stat"><b id="fol"></b><span>followers</span></div><div class="stat"><b id="fng"></b><span>following</span></div></div>
+          </div>
+        </div>
+        <div class="bio" id="bio"></div>
+        <div class="acts"><span>Following</span><span>Message</span></div>
+        <div class="tabs" aria-hidden="true"><span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg></span><span></span><span></span></div>
+        <div class="grid" id="grid"></div>
+      </div>
+      <div class="view" id="fv" hidden>
+        <div class="ptop"><button class="ibtn" id="back" type="button" aria-label="უკან"></button><div class="t"><small id="pvUser"></small><b>Posts</b></div></div>
+        <div id="feed"></div>
+      </div>
+      <div class="toast" id="toast" role="status" hidden></div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script src="core.js"></script>
+<script>
+let CFG = null, LAYOUT = null, POSTS = [], STATE = {comments:[], status:{}}, dirty = 0;
+const KEYNAME = 'igs_key_' + CLIENT;
+const key = () => ls.get(KEYNAME) || '';
+const statusOf = id => (STATE.status || {})[id] || '';
+const commentsOf = id => (STATE.comments || []).filter(c => c.post === id);
+
+function setTheme(t){ document.body.classList.toggle('dark', t==='dark'); $('#themeBtn').innerHTML = t==='dark' ? IC.sun : IC.moon; ls.set('igs_theme', t); }
+setTheme(ls.get('igs_theme') || 'light');
+$('#themeBtn').onclick = $('#themeBtn2').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
+$('#back').innerHTML = IC.back;
+$('#previewLink').href = 'preview.html?c=' + CLIENT;
+let toastT; function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3500); }
+const msg = (m) => { $('#msg').textContent = m; };
+
+$('#key').value = key();
+$('#keySave').onclick = async () => {
+  const k = $('#key').value.trim(); if(k.length < 6){ msg('კოდი მინიმუმ 6 სიმბოლო უნდა იყოს.'); return; }
+  try{ await api.post(CFG, {action:'checkKey', key:k}); ls.set(KEYNAME, k); msg('კოდი შენახულია ✓'); }catch(e){ msg('კოდი არასწორია.'); }
+};
+
+function cloneLayout(){ return JSON.parse(JSON.stringify(LAYOUT)); }
+function rebuild(){ POSTS = arrange(CFG, LAYOUT); $('#pc').textContent = POSTS.length; }
+
+let saveT = null;
+function save(){
+  LAYOUT.updated = Date.now(); dirty = LAYOUT.updated; rebuild();
+  clearTimeout(saveT);
+  saveT = setTimeout(async () => {
+    if(!key()){ msg('ცვლილებების შესანახად ზემოთ ჩაწერე გუნდის კოდი.'); return; }
+    try{ const r = await api.post(CFG, {action:'saveLayout', key:key(), layout: LAYOUT}); STATE = r.state; msg('შენახულია ✓'); renderSide(); }
+    catch(e){ msg('ვერ შეინახა: ' + e.message); }
+  }, 600);
+}
+
+function renderProfile(){
+  $('#cname').textContent = CFG.client + ' · Studio';
+  $('#uname').textContent = CFG.username; $('#pvUser').textContent = CFG.username;
+  $('#dname').textContent = CFG.displayName; $('#bio').textContent = CFG.bio;
+  $('#fol').textContent = CFG.followers; $('#fng').textContent = CFG.following;
+  $('#av').src = mediaUrl(CFG.avatar);
+}
+function renderGrid(){
+  $('#grid').innerHTML = POSTS.map(p => {
+    const s = statusOf(p.id), n = commentsOf(p.id).filter(c => c.type !== 'approve').length;
+    const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
+    return `<div class="tile" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="">${badge}
+      ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓' : '✎'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}
+      <div class="tools"><button type="button" data-act="pin" aria-pressed="${p.pinned}" title="მიმაგრება">📌</button><button type="button" data-act="del" title="წაშლა">✕</button></div></div>`;
+  }).join('');
+}
+function renderSide(){
+  const cs = (STATE.comments || []).slice().reverse();
+  const title = id => (CFG.posts.find(p => p.id === id) || {}).title || id;
+  $('#clist').innerHTML = cs.length ? cs.map(c => `<div class="ci${c.type==='approve' ? ' ok' : ''}" data-go="${esc(c.post)}"><small>${esc(title(c.post))} · ${fmtTime(c.ts)}</small><b>${esc(c.name)}:</b> ${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}</div>`).join('') : '<p>ჯერ არ არის.</p>';
+  const rm = (LAYOUT.removed || []).filter(id => CFG.posts.some(p => p.id === id));
+  $('#rmBox').hidden = !rm.length;
+  $('#rm').innerHTML = rm.map(id => `<button type="button" class="pbtn" data-restore="${id}">↩ ${esc(title(id))}</button>`).join('');
+}
+$('#rm').addEventListener('click', e => { const b = e.target.closest('[data-restore]'); if(!b) return; LAYOUT.removed = LAYOUT.removed.filter(x => x !== b.dataset.restore); save(); renderGrid(); renderSide(); });
+$('#clist').addEventListener('click', e => { const c = e.target.closest('[data-go]'); if(c) openPost(c.dataset.go); });
+
+/* grid actions (pointerdown so the drag library never swallows them) */
+$('#grid').addEventListener('pointerdown', e => {
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  const id = b.closest('.tile').dataset.id;
+  if(b.dataset.act === 'pin'){ const s = new Set(LAYOUT.pinned || []); s.has(id) ? s.delete(id) : s.add(id); LAYOUT.pinned = [...s]; }
+  if(b.dataset.act === 'del'){ LAYOUT.removed = [...new Set([...(LAYOUT.removed || []), id])]; toast('პოსტი ამოღებულია. პანელიდან დააბრუნებ.'); }
+  save(); renderGrid(); renderSide();
+}, true);
+$('#grid').addEventListener('click', e => { if(e.target.closest('[data-act]')) return; const t = e.target.closest('.tile'); if(t) openPost(t.dataset.id); });
+function initSortable(){
+  if(!window.Sortable) return;
+  Sortable.create($('#grid'), { animation:160, delay:220, delayOnTouchOnly:true, filter:'.tools', preventOnFilter:false,
+    onEnd(){ LAYOUT.order = [...$('#grid').children].map(c => c.dataset.id); save(); renderGrid(); } });
+}
+
+/* feed with editable captions */
+function renderFeed(){
+  $('#feed').innerHTML = POSTS.map(p => `
+  <article class="post" id="post-${p.id}">
+    <div class="ph"><span class="mini"><img src="${mediaUrl(CFG.avatar)}" alt=""></span><b>${esc(CFG.username)}</b>${IC.dots}</div>
+    <div class="media">${p.video
+      ? `<video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute">${IC.muted}</button><span class="playov">${IC.play}</span>`
+      : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
+    <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
+    <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}" contenteditable="true" spellcheck="false">${esc(p.caption)}</span></div>
+    <div class="cmts">${commentsOf(p.id).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.type==='approve' ? '✓ დაამტკიცა' : esc(c.text)}<small>${fmtTime(c.ts)}</small></div>`).join('')}</div>
+    <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}</div>
+  </article>`).join('');
+  document.querySelectorAll('#feed .track').forEach(t => {
+    const post = t.closest('.post'), dots = post.querySelectorAll('.dots i'), cnt = post.querySelector('.cnt');
+    t.addEventListener('scroll', () => { const i = Math.round(t.scrollLeft / t.clientWidth); dots.forEach((d,k) => d.classList.toggle('on', k === i)); if(cnt) cnt.textContent = (i+1) + '/' + t.dataset.n; }, {passive:true});
+  });
+  document.querySelectorAll('#feed video').forEach(v => { const ov = v.parentNode.querySelector('.playov'); v.addEventListener('play', () => ov.hidden = true); v.addEventListener('pause', () => ov.hidden = false); });
+}
+$('#feed').addEventListener('input', e => {
+  const el = e.target.closest('[data-cap]'); if(!el) return;
+  LAYOUT.captions = LAYOUT.captions || {}; LAYOUT.captions[el.dataset.cap] = el.innerText.replace(/\n$/, ''); save();
+});
+$('#feed').addEventListener('click', e => {
+  const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
+  const vid = e.target.closest('video'); if(vid) openReelsView(vid.closest('.post').id.slice(5));
+});
+function openReelsView(id){ document.querySelectorAll('#feed video').forEach(v => v.pause()); openReels($('#app'), {posts: displayOrder(POSTS), startId: id, username: CFG.username}); }
+function openPost(id){
+  const p = POSTS.find(x => x.id === id); if(!p) return;
+  if(p.video){ openReelsView(id); return; }
+  renderFeed(); $('#pv').hidden = true; $('#fv').hidden = false;
+  const el = document.getElementById('post-' + id); $('#fv').scrollTop = el ? el.offsetTop - 50 : 0;
+}
+$('#back').onclick = () => { $('#fv').hidden = true; $('#pv').hidden = false; renderGrid(); };
+
+/* send the arrangement to the posting schedule */
+$('#syncBtn').onclick = async () => {
+  if(!key()){ msg('ჯერ ჩაწერე გუნდის კოდი.'); return; }
+  const btn = $('#syncBtn'); btn.disabled = true; msg('Posting Schedule ახლდება… (ფაილების ატვირთვას შეიძლება 1 წუთი დასჭირდეს)');
+  const posts = POSTS.map(p => ({id:p.id, title:p.title, caption:p.caption, match:p.match || '', posted:!!p.posted, postType:p.postType,
+    video: p.video ? p.video : '', count: p.video ? 1 : p.media.length, drive: p.drive || '', files: p.video ? [p.video] : p.media}));
+  try{
+    const r = await api.post(CFG, {action:'sync', key:key(), layout: LAYOUT, posts, baseUrl: new URL(BASE + 'media/', location.href).href});
+    STATE = r.state; renderSide(); renderGrid();
+    msg(`მზადაა ✓ გადალაგდა ${r.moved}, ახალი რიგი ${r.created}, დაკავშირდა ${r.linked}, ატვირთვა ${r.uploaded}.`);
+  }catch(e){ msg('ვერ მოხერხდა: ' + e.message); }
+  btn.disabled = false;
+};
+
+/* boot + keep in sync with other devices and client feedback */
+(async () => {
+  try{ CFG = await loadConfig(); }catch(e){ msg('კონფიგი ვერ ჩაიტვირთა.'); return; }
+  LAYOUT = JSON.parse(JSON.stringify(CFG.defaultLayout || {order:[],pinned:[],removed:[]}));
+  rebuild(); renderProfile(); renderGrid(); renderSide(); initSortable();
+  if(!CFG.api){ msg('Apps Script-ის ბმული ჯერ არ არის config.json-ში.'); return; }
+  const pull = async (first) => {
+    try{
+      const s = await api.state(CFG); STATE = s;
+      if(s.layout && (first || ((s.layout.updated || 0) > (LAYOUT.updated || 0) && Date.now() - dirty > 3000))){ LAYOUT = s.layout; rebuild(); if($('#fv').hidden) renderGrid(); }
+      renderSide(); if($('#fv').hidden) renderGrid();
+    }catch(e){ msg('კავშირი ვერ დამყარდა: ' + e.message); }
+  };
+  await pull(true);
+  setInterval(() => { if(document.visibilityState === 'visible') pull(false); }, 15000);
+})();
+</script>
+</body>
+</html>
