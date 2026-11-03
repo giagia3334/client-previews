@@ -10,6 +10,7 @@
  *  - studio sync (key) -> creates/links rows, fills captions, uploads media to Drive, reorders rows
  */
 var CONF = {
+  sheetId: '',            // optional: leave empty when the script is opened from the sheet (Extensions > Apps Script)
   sheetName: 'Posts',
   headerRow: 3,
   pink: '#F6C6D8',
@@ -51,7 +52,7 @@ function doPost(e) {
 
 /* ---------- helpers ---------- */
 function out_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
-function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
+function ss_() { return CONF.sheetId ? SpreadsheetApp.openById(CONF.sheetId) : SpreadsheetApp.getActiveSpreadsheet(); }
 function sheet_() { return ss_().getSheetByName(CONF.sheetName) || ss_().getSheets()[0]; }
 function aux_(name, header) {
   var s = ss_().getSheetByName(name);
