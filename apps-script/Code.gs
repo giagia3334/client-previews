@@ -8,6 +8,7 @@
  *  - client approve  -> logged, "Client status" = approved, row turns yellow
  *  - studio saveLayout (key) -> stores the grid order/pins/captions so every device sees the same
  *  - studio patch (key) -> applies single edits (pin, order, caption, remove) to the stored layout
+ *  - studio resolve (key) -> marks a client's change request as done, row loses its pink colour
  *  - studio sync (key) -> creates/links rows, fills captions, uploads media to Drive, reorders rows
  */
 var CONF = {
@@ -43,6 +44,7 @@ function doPost(e) {
     else if (b.action === 'approve') res = approve_(b);
     else if (b.action === 'saveLayout') { checkKey_(b.key); saveLayout_(b.layout); res = {}; }
     else if (b.action === 'patch') { checkKey_(b.key); patch_(b.ops || [], b.base); res = {}; }
+    else if (b.action === 'resolve') { checkKey_(b.key); res = resolve_(b); }
     else if (b.action === 'sync') { checkKey_(b.key); res = sync_(b); }
     else if (b.action === 'checkKey') { checkKey_(b.key); res = {}; }
     else throw new Error('unknown action');
@@ -140,8 +142,17 @@ function state_() {
   var comments = [], status = {};
   rows.forEach(function (r) {
     var ts = r[0] instanceof Date ? r[0].getTime() : Number(r[0]);
-    comments.push({ ts: ts, post: String(r[1]), name: String(r[2]), type: String(r[3]), text: String(r[4]) });
-    status[String(r[1])] = String(r[3]) === 'approve' ? 'approved' : 'changes';
+    var post = String(r[1]), type = String(r[3]);
+    if (type === 'resolved') {
+      // the team marked a requested change as done (text = the comment's ts, empty = all of that post)
+      var target = Number(r[4]) || 0;
+      comments.forEach(function (c) { if (c.post === post && c.type === 'comment' && (!target || c.ts === target)) c.resolved = true; });
+      var open = comments.some(function (c) { return c.post === post && c.type === 'comment' && !c.resolved; });
+      if (status[post] === 'changes' && !open) delete status[post];
+      return;
+    }
+    comments.push({ ts: ts, post: post, name: String(r[2]), type: type, text: String(r[4]) });
+    status[post] = type === 'approve' ? 'approved' : 'changes';
   });
   return { layout: layout_(), comments: comments, status: status };
 }
@@ -173,6 +184,20 @@ function approve_(b) {
     var c = cols_();
     sheet_().getRange(row, c.clientStatus).setValue('დამტკიცებულია (' + name + ')');
     paint_(row, CONF.yellow);
+  }
+  return { row: row };
+}
+
+/* team marks a client's change request as done */
+function resolve_(b) {
+  var post = clean_(b.post, 60);
+  if (!post) throw new Error('empty');
+  aux_('_comments', ['ts', 'post', 'name', 'type', 'text']).appendRow([new Date(), post, 'გუნდი', 'resolved', String(b.ts || '')]);
+  var row = findRow_(post);
+  if (row && !state_().status[post]) {
+    var c = cols_();
+    sheet_().getRange(row, c.clientStatus).setValue('გასწორდა');
+    sheet_().getRange(row, 1, 1, c.last).setBackground(null);
   }
   return { row: row };
 }
