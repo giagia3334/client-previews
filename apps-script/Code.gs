@@ -106,9 +106,31 @@ function findRow_(postId) {
   for (var i = 0; i < d.values.length; i++) if (String(d.values[i][c.postId - 1]) === String(postId)) return d.first + i;
   return 0;
 }
-/* colour only the content columns E–S; A–D keep the row's own colours */
-function paint_(row, color) {
-  sheet_().getRange('E' + row + ':S' + row).setBackground(color);
+/* Row colours come from conditional-format rules on Client status (see fixColors), so when the
+   status is cleared the sheet's own colours come back by themselves. Kept as a no-op for old calls. */
+function paint_(row, color) {}
+function setStatus_(row, value) {
+  var c = cols_();
+  if (c.status) sheet_().getRange(row, c.status).setValue(value);
+}
+/* run once from the editor: adds the yellow/pink rules on top and removes colours painted by older versions */
+function fixColors() {
+  var sh = sheet_(), c = cols_(), first = CONF.headerRow + 1;
+  var range = sh.getRange('E' + first + ':S' + Math.max(sh.getLastRow(), 1000));
+  var rules = sh.getConditionalFormatRules().filter(function (r) {
+    var b = r.getBooleanCondition();
+    return !(b && /\$S/.test(JSON.stringify(b.getCriteriaValues())));
+  });
+  var ok = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=REGEXMATCH($S' + first + ',"დადასტურებულია")')
+    .setBackground(CONF.yellow).setRanges([range]).build();
+  var change = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=REGEXMATCH($S' + first + ',"შესაცვლელია")')
+    .setBackground(CONF.pink).setRanges([range]).build();
+  sh.setConditionalFormatRules([ok, change].concat(rules));
+  var d = dataRows_();
+  d.values.forEach(function (r, i) {
+    if (String(r[c.postId - 1] || '')) sh.getRange('E' + (d.first + i) + ':S' + (d.first + i)).setBackground(null);
+  });
+  Logger.log('rules: ' + sh.getConditionalFormatRules().length);
 }
 
 /* ---------- state ---------- */
@@ -179,7 +201,7 @@ function comment_(b) {
     var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd.MM HH:mm');
     cell.setValue((prev ? prev + '\n' : '') + name + ' (' + stamp + '): ' + text).setWrap(true);
     sh.getRange(row, c.clientStatus).setValue('შესაცვლელია');
-    paint_(row, CONF.pink);
+    setStatus_(row, 'Client Asked For Change');
   }
   notify_('comment', b, post, name, text, row);
   return { row: row };
@@ -192,7 +214,7 @@ function approve_(b) {
   if (row) {
     var c = cols_();
     sheet_().getRange(row, c.clientStatus).setValue('დადასტურებულია (' + name + ')');
-    paint_(row, CONF.yellow);
+    setStatus_(row, 'Ready To Be Posted');
   }
   notify_('approve', b, post, name, '', row);
   return { row: row };
@@ -224,7 +246,7 @@ function reopen_(b) {
   var row = findRow_(post);
   if (row) {
     sheet_().getRange(row, cols_().clientStatus).setValue('ხელახლა განსახილველი');
-    paint_(row, null);
+    setStatus_(row, 'Needs Approval');
   }
   return { row: row };
 }
@@ -238,7 +260,7 @@ function resolve_(b) {
   if (row && !state_().status[post]) {
     var c = cols_();
     sheet_().getRange(row, c.clientStatus).setValue('გასწორდა');
-    paint_(row, null);
+    setStatus_(row, 'Needs Approval');
   }
   return { row: row };
 }
