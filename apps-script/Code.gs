@@ -7,6 +7,7 @@
  *  - client comment  -> logged, written to "Client comments" column, row turns pink
  *  - client approve  -> logged, "Client status" = approved, row turns yellow
  *  - studio saveLayout (key) -> stores the grid order/pins/captions so every device sees the same
+ *  - studio patch (key) -> applies single edits (pin, order, caption, remove) to the stored layout
  *  - studio sync (key) -> creates/links rows, fills captions, uploads media to Drive, reorders rows
  */
 var CONF = {
@@ -41,6 +42,7 @@ function doPost(e) {
     if (b.action === 'comment') res = comment_(b);
     else if (b.action === 'approve') res = approve_(b);
     else if (b.action === 'saveLayout') { checkKey_(b.key); saveLayout_(b.layout); res = {}; }
+    else if (b.action === 'patch') { checkKey_(b.key); patch_(b.ops || [], b.base); res = {}; }
     else if (b.action === 'sync') { checkKey_(b.key); res = sync_(b); }
     else if (b.action === 'checkKey') { checkKey_(b.key); res = {}; }
     else throw new Error('unknown action');
@@ -116,6 +118,20 @@ function saveLayout_(layout) {
   var s = aux_('_preview');
   s.getRange(1, 1).setValue(JSON.stringify(layout || {}));
   s.getRange(1, 2).setValue(new Date());
+}
+/* apply studio edits one by one on the stored layout, inside the script lock,
+   so two people editing at the same time never overwrite each other */
+function patch_(ops, base) {
+  var l = layout_() || base || { order: [], pinned: [], removed: [] };
+  ops.forEach(function (o) {
+    if (o.t === 'order') l.order = o.order;
+    else if (o.t === 'pin') { var p = (l.pinned || []).filter(function (x) { return x !== o.id; }); if (o.on) p.push(o.id); l.pinned = p; }
+    else if (o.t === 'remove') { var r = (l.removed || []).filter(function (x) { return x !== o.id; }); r.push(o.id); l.removed = r; }
+    else if (o.t === 'restore') l.removed = (l.removed || []).filter(function (x) { return x !== o.id; });
+    else if (o.t === 'caption') { l.captions = l.captions || {}; l.captions[o.id] = o.text; }
+  });
+  l.updated = new Date().getTime();
+  saveLayout_(l);
 }
 function state_() {
   var log = aux_('_comments', ['ts', 'post', 'name', 'type', 'text']);
