@@ -104,9 +104,9 @@ function findRow_(postId) {
   for (var i = 0; i < d.values.length; i++) if (String(d.values[i][c.postId - 1]) === String(postId)) return d.first + i;
   return 0;
 }
+/* colour only the content columns E–S; A–D keep the row's own colours */
 function paint_(row, color) {
-  var c = cols_();
-  sheet_().getRange(row, 1, 1, c.last).setBackground(color);
+  sheet_().getRange('E' + row + ':S' + row).setBackground(color);
 }
 
 /* ---------- state ---------- */
@@ -173,6 +173,7 @@ function comment_(b) {
     sh.getRange(row, c.clientStatus).setValue('შესაცვლელია');
     paint_(row, CONF.pink);
   }
+  notify_('comment', b, post, name, text, row);
   return { row: row };
 }
 function approve_(b) {
@@ -182,11 +183,30 @@ function approve_(b) {
   var row = findRow_(post);
   if (row) {
     var c = cols_();
-    sheet_().getRange(row, c.clientStatus).setValue('დამტკიცებულია (' + name + ')');
+    sheet_().getRange(row, c.clientStatus).setValue('დადასტურებულია (' + name + ')');
     paint_(row, CONF.yellow);
   }
+  notify_('approve', b, post, name, '', row);
   return { row: row };
 }
+
+/* email the team about client feedback; recipients: Script Properties > NOTIFY (comma separated) */
+function notify_(type, b, post, name, text, row) {
+  try {
+    var to = PropertiesService.getScriptProperties().getProperty('NOTIFY') || 'gia.ananidze.98@gmail.com';
+    var title = clean_(b.title, 120) || post;
+    var ok = type === 'approve';
+    var url = ss_().getUrl() + (row ? '#gid=' + sheet_().getSheetId() + '&range=A' + row : '');
+    var lines = [(ok ? '✓ დადასტურდა: ' : '✎ ცვლილებას ითხოვს: ') + title, 'ვინ: ' + name];
+    if (!ok) lines.push('კომენტარი: ' + text);
+    lines.push('', 'Posting Schedule: ' + url);
+    if (!row) lines.push('(ამ პოსტს ცხრილში რიგი ჯერ არ აქვს. სტუდიოში დააჭირეთ „Schedule-ში“.)');
+    MailApp.sendEmail({ to: to, subject: 'Likedent: ' + (ok ? 'კლიენტმა დაადასტურა' : 'კლიენტი ცვლილებას ითხოვს') + ' · ' + title,
+      body: lines.join('\n'), name: 'Likedent preview' });
+  } catch (e) { /* the feedback is saved even if the email fails */ }
+}
+/* run once from the editor so the script may send email */
+function authorizeEmail() { Logger.log(MailApp.getRemainingDailyQuota()); }
 
 /* team marks a client's change request as done */
 function resolve_(b) {
@@ -197,7 +217,7 @@ function resolve_(b) {
   if (row && !state_().status[post]) {
     var c = cols_();
     sheet_().getRange(row, c.clientStatus).setValue('გასწორდა');
-    sheet_().getRange(row, 1, 1, c.last).setBackground(null);
+    paint_(row, null);
   }
   return { row: row };
 }
