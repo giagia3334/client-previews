@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ka">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>კლიენტის აპის მართვა</title>
+<link rel="stylesheet" href="hub.css">
+<style>
+html,body{margin:0;min-height:100%}
+body{background:var(--h-bg);color:var(--h-fg);font-family:"Noto Sans Georgian",-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:14px}
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.top .t{flex:1;min-width:200px;line-height:1.15}
+.top .t small{display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--h-gold)}
+.top .t b{font-size:24px}
+.box{background:var(--h-card);border:1px solid var(--h-line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--h-shadow)}
+.box h2{margin:0;font-size:16px}
+.box p{margin:0;font-size:13px;color:var(--h-sub);line-height:1.5}
+.sw{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--h-line);font-size:14.5px}
+.sw:first-of-type{border-top:0}
+.sw span{flex:1}.sw small{display:block;color:var(--h-sub);font-size:12px}
+.sw input{width:44px;height:26px;appearance:none;border-radius:13px;background:var(--h-soft);position:relative;cursor:pointer;transition:background .2s;border:1px solid var(--h-line)}
+.sw input::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .2s}
+.sw input:checked{background:var(--h-emer-btn);border-color:var(--h-emer-btn)}
+.sw input:checked::after{left:20px}
+.sw input:focus-visible{outline:2px solid var(--h-gold);outline-offset:2px}
+.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--h-sub)}
+.f input,.f select{font:15px "Noto Sans Georgian",-apple-system,sans-serif;color:var(--h-fg);background:var(--h-bg);border:1px solid var(--h-line);border-radius:12px;padding:10px 12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#main{display:contents}#main[hidden]{display:none}
+.msg{font-size:13px;min-height:18px;color:var(--h-emer)}
+.msg.err{color:#B3261E}
+body.dark .msg.err{color:#F2B8B5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="t"><small id="cname">Likedent</small><b>კლიენტის აპის მართვა</b></div>
+    <a class="hbtn" id="clientLink" target="_blank" rel="noopener">კლიენტის აპი ↗</a>
+    <a class="hbtn" href="#" id="studioLink">სტუდიო</a>
+    <button class="hbtn" type="button" id="theme">☾ / ☀︎</button>
+  </div>
+
+  <section class="box" id="keyBox">
+    <h2>გუნდის კოდი</h2>
+    <p>იგივე კოდი, რაც სტუდიოში. ამ მოწყობილობაზე ერთხელ შეიყვანე. კოდით კლიენტის აპშიც ყველაფერს დაინახავ PIN-ის გარეშე.</p>
+    <div class="row"><input class="hbtn" style="flex:1;min-width:0;font-weight:500" id="key" type="password" autocomplete="off" placeholder="გუნდის კოდი"><button class="hbtn gold" type="button" id="keySave">შესვლა</button></div>
+    <div class="msg" id="keyMsg" role="status"></div>
+  </section>
+
+  <div id="main" hidden>
+    <section class="box">
+      <h2>რას ხედავს კლიენტი</h2>
+      <p>გამორთული ჩანართი კლიენტის აპიდან ქრება. მონაცემები არ იშლება.</p>
+      <div id="tabs"></div>
+    </section>
+
+    <section class="box">
+      <h2>სარეკლამო ხარჯი</h2>
+      <p>ლარში, თვის მიხედვით. ამით ითვლება „ერთი ლიდის ფასი“ ანალიტიკაში.</p>
+      <label class="f" style="max-width:220px">თვე<select id="month"></select></label>
+      <div class="grid2" id="spend"></div>
+    </section>
+
+    <section class="box">
+      <h2>კლინიკის PIN</h2>
+      <p id="pinState">კლინიკა ამ PIN-ით ხედავს პაციენტებს და ანალიტიკას. ახალი PIN ძველს ცვლის, ყველა ტელეფონზე ხელახლა შესვლა დასჭირდებათ.</p>
+      <div class="row"><input class="hbtn" style="flex:1;min-width:0;font-weight:500;letter-spacing:.2em" id="pin" inputmode="numeric" maxlength="6" placeholder="6 ციფრი" autocomplete="off"><button class="hbtn" type="button" id="pinGen">შემთხვევითი</button></div>
+    </section>
+
+    <div class="row"><button class="hbtn gold" type="button" id="save">შენახვა</button><span class="msg" id="msg" role="status"></span></div>
+  </div>
+</div>
+<script src="core.js"></script>
+<script>
+(() => {
+const KEYNAME = 'igs_key_' + CLIENT;
+const TABS = [['content','კონტენტი','ინსტაგრამის პოსტები, დადასტურება და კომენტარები'],['patients','პაციენტები','მოთხოვნები სამ ეტაპად'],['analytics','ანალიტიკა','ლიდები, ჩაწერა და ფასი არხების მიხედვით']];
+const CH = [['facebook','Facebook'],['instagram','Instagram'],['google','Google'],['tiktok','TikTok'],['sms','SMS'],['other','სხვა']];
+const MON = ['იანვარი','თებერვალი','მარტი','აპრილი','მაისი','ივნისი','ივლისი','აგვისტო','სექტემბერი','ოქტომბერი','ნოემბერი','დეკემბერი'];
+let CFG = null, S = null, spendEdit = {};
+const setTheme = t => { document.body.classList.toggle('dark', t === 'dark'); ls.set('igs_theme', t); };
+setTheme(ls.get('igs_theme') || 'light');
+$('#theme').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
+$('#clientLink').href = 'preview.html?c=' + CLIENT; $('#studioLink').href = 'studio.html?c=' + CLIENT;
+const say = (el, m, err) => { el.textContent = m; el.classList.toggle('err', !!err); };
+
+const months = (() => { const d = new Date(), out = []; for(let i = -1; i < 12; i++){ const x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}`); } return out; })();
+$('#month').innerHTML = months.map(m => `<option value="${m}">${MON[+m.slice(5) - 1]} ${m.slice(0,4)}</option>`).join('');
+$('#month').value = months[1];
+function renderSpend(){
+  const m = $('#month').value, v = Object.assign({}, (S.spend || {})[m] || {}, spendEdit[m] || {});
+  $('#spend').innerHTML = CH.map(([k, t]) => `<label class="f">${t}<input type="number" min="0" step="1" inputmode="decimal" data-ch="${k}" value="${v[k] || ''}" placeholder="0"></label>`).join('');
+}
+$('#month').onchange = renderSpend;
+$('#spend').addEventListener('input', e => { const i = e.target.closest('[data-ch]'); if(!i) return; const m = $('#month').value; (spendEdit[m] = spendEdit[m] || {})[i.dataset.ch] = Number(i.value) || 0; });
+
+function render(){
+  $('#tabs').innerHTML = TABS.map(([k, t, d]) => `<label class="sw"><span>${t}<small>${d}</small></span><input type="checkbox" data-tab="${k}" ${S.tabs[k] ? 'checked' : ''}></label>`).join('');
+  $('#pinState').firstChild.textContent = (S.hasPin ? 'PIN დაყენებულია. ' : 'PIN ჯერ არ არის დაყენებული: კლინიკა პაციენტებს ვერ ნახავს. ') + 'კლინიკა ამ PIN-ით ხედავს პაციენტებს და ანალიტიკას. ახალი PIN ძველს ცვლის, ყველა ტელეფონზე ხელახლა შესვლა დასჭირდებათ.';
+  renderSpend();
+  $('#keyBox').hidden = true; $('#main').hidden = false;
+}
+async function load(){
+  const r = await api.post(CFG, {action:'hubLoad', key: ls.get(KEYNAME)});
+  S = r.settings; render();
+}
+$('#keySave').onclick = async () => {
+  const k = $('#key').value.trim(); if(k.length < 6){ say($('#keyMsg'), 'კოდი მინიმუმ 6 სიმბოლოა.', 1); return; }
+  ls.set(KEYNAME, k);
+  try{ await load(); }catch(e){ ls.set(KEYNAME, ''); say($('#keyMsg'), /unknown/.test(e.message) ? 'Apps Script-ში ჰაბი ჯერ არ არის დამატებული.' : 'კოდი არასწორია.', 1); }
+};
+$('#pinGen').onclick = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); $('#pin').value = String(a[0] % 1e6).padStart(6, '0'); };
+$('#save').onclick = async () => {
+  const pin = $('#pin').value.trim();
+  if(pin && !/^\d{6}$/.test(pin)){ say($('#msg'), 'PIN ზუსტად 6 ციფრი უნდა იყოს.', 1); return; }
+  const tabs = {}; document.querySelectorAll('[data-tab]').forEach(i => tabs[i.dataset.tab] = i.checked);
+  const spend = {}; Object.keys(spendEdit).forEach(m => spend[m] = Object.assign({}, (S.spend || {})[m] || {}, spendEdit[m]));
+  $('#save').disabled = true; say($('#msg'), 'ინახება…');
+  try{
+    const r = await api.post(CFG, {action:'hubSettings', key: ls.get(KEYNAME), settings: {tabs, spend}, pin});
+    S = r.settings; spendEdit = {}; $('#pin').value = ''; render();
+    say($('#msg'), pin ? `შენახულია ✓ ახალი PIN: ${pin} (გაუგზავნე კლინიკას)` : 'შენახულია ✓');
+  }catch(e){ say($('#msg'), 'ვერ შეინახა: ' + e.message, 1); }
+  $('#save').disabled = false;
+};
+(async () => {
+  try{ CFG = await loadConfig(); $('#cname').textContent = CFG.client || CLIENT; }catch(e){ say($('#keyMsg'), 'კონფიგი ვერ ჩაიტვირთა.', 1); return; }
+  if(ls.get(KEYNAME)){ $('#key').value = ls.get(KEYNAME); try{ await load(); }catch(e){ say($('#keyMsg'), /unknown/.test(e.message) ? 'Apps Script-ში ჰაბი ჯერ არ არის დამატებული.' : 'შეიყვანე გუნდის კოდი.', 1); } }
+})();
+})();
+</script>
+</body>
+</html>

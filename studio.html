@@ -67,6 +67,7 @@ body.dark .panel p{color:#A99C90}
     <div class="msg" id="msg"></div>
     <div class="seg"><button class="pbtn" type="button" id="themeBtn2">☾ / ☀︎ თემა</button><a class="pbtn" id="previewLink" target="_blank" rel="noopener">კლიენტის ხედი ↗</a></div>
     <a class="pbtn" id="schedLink" target="_blank" rel="noopener" hidden>📄 Posting Schedule ↗</a>
+    <a class="pbtn" id="hubLink" target="_blank" rel="noopener">⚙ კლიენტის აპის მართვა ↗</a>
     <div><div class="lbl">კლიენტის კომენტარები</div><div class="clist" id="clist"><p>ჯერ არ არის.</p></div></div>
     <div id="rmBox" hidden><div class="lbl">წაშლილი პოსტები (დაბრუნება)</div><div class="rm" id="rm"></div></div>
   </aside>
@@ -107,6 +108,7 @@ setTheme(ls.get('igs_theme') || 'light');
 $('#themeBtn').onclick = $('#themeBtn2').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
 $('#back').innerHTML = IC.back;
 $('#previewLink').href = 'preview.html?c=' + CLIENT;
+$('#hubLink').href = 'hub-admin.html?c=' + CLIENT;
 $('#mPreview').href = 'preview.html?c=' + CLIENT;
 $('#mSync').onclick = () => $('#syncBtn').click();
 $('#mPanel').onclick = () => $('.panel').scrollIntoView({behavior:'smooth'});
