@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ka"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Likedent · შეთავაზებები</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="../clients/likedent/media/avatar.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--cream:#F7F2EC;--espresso:#2B211C;--gold:#C4A061;--gold-dk:#9C7A3C;--sand:#D8C3AF;--warm:#6E5E50;--card:#FFFDFA}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--cream);color:var(--espresso);font:400 16px/1.6 "Noto Sans Georgian",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:640px;margin:0 auto;padding:28px 18px calc(120px + env(safe-area-inset-bottom))}
+header{text-align:center;margin-bottom:26px}
+header img{width:96px;height:96px;border-radius:50%;display:block;margin:0 auto 14px}
+h1{font-size:24px;line-height:1.3;margin:0 0 8px;font-weight:700}
+.lede{color:var(--warm);margin:0;font-size:15.5px}
+.how{display:inline-block;margin-top:14px;background:#fff;border:1px solid var(--sand);border-radius:999px;padding:7px 16px;font-size:14px;font-weight:600}
+.list{display:flex;flex-direction:column;gap:14px}
+.offer{position:relative;display:grid;grid-template-columns:68px 1fr;gap:6px 14px;align-items:center;background:var(--card);border:1.5px solid #EADFD3;border-radius:20px;padding:18px 18px 18px 16px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;text-align:left;font:inherit;color:inherit;width:100%}
+.offer:active{transform:scale(.99)}
+.pct{width:68px;height:68px;border-radius:18px;background:var(--cream);border:1px solid var(--sand);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.pct b{font-size:26px;font-weight:800;color:var(--gold-dk)}
+.num{font-size:12.5px;font-weight:700;color:var(--gold-dk);margin:0 0 3px;padding-right:34px}
+.offer h2{font-size:17.5px;line-height:1.35;margin:0;font-weight:700;padding-right:34px}
+.offer p{grid-column:1/-1;margin:6px 0 0;color:var(--warm);font-size:15px}
+.tick{position:absolute;top:16px;right:16px;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--sand);display:flex;align-items:center;justify-content:center;background:#fff}
+.tick svg{width:14px;height:14px;opacity:0}
+.offer.on{border-color:var(--gold);box-shadow:0 6px 22px rgba(156,122,60,.16)}
+.offer.on .pct{background:var(--gold);border-color:var(--gold)}
+.offer.on .pct b{color:var(--espresso)}
+.offer.on .tick{background:var(--gold);border-color:var(--gold)}
+.offer.on .tick svg{opacity:1}
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(247,242,236,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid #E6DACC;padding:12px 18px calc(12px + env(safe-area-inset-bottom))}
+.bar .in{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.count{flex:1;font-size:14.5px;color:var(--warm)} .count b{color:var(--espresso)}
+.send{border:0;border-radius:14px;background:var(--gold);color:var(--espresso);font:700 16px "Noto Sans Georgian",system-ui,sans-serif;padding:14px 22px;cursor:pointer}
+.send:disabled{background:#E3D6C6;color:#9A8B7D;cursor:default}
+.toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,20px);background:var(--espresso);color:var(--cream);padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+footer{text-align:center;color:var(--warm);font-size:13.5px;margin-top:28px}
+</style></head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="../clients/likedent/media/avatar.jpg" alt="Likedent">
+    <h1>შეთავაზებები პროფესიულ წმენდაზე</h1>
+    <p class="lede">6 ვარიანტი. აირჩიეთ ის 3, რომელიც კლინიკისთვის საუკეთესოა.</p>
+    <span class="how">შეეხეთ ბარათს, რომ აირჩიოთ</span>
+  </header>
+  <div class="list" id="list"></div>
+  <footer>📍 ბაგრატიონის 178, ბათუმი · 📞 +995 557 010 155</footer>
+</div>
+<div class="bar"><div class="in">
+  <div class="count" id="count">არჩეულია <b>0</b> / 3</div>
+  <button class="send" id="send" disabled>გაგზავნა</button>
+</div></div>
+<div class="toast" id="toast"></div>
+<script>
+const OFFERS=[
+ {pct:"20%",tag:"შემდეგ ვიზიტზე",t:"20% ფასდაკლება მომდევნო ვიზიტზე",d:"გაიკეთეთ კბილების პროფესიული წმენდა ჩვენს კლინიკაში და მიიღეთ 20%-იანი ფასდაკლება მომდევნო ვიზიტზე, ნებისმიერ სხვა სტომატოლოგიურ პროცედურაზე."},
+ {pct:"20%",tag:"ორივეს",t:"მეგობართან ერთად 20% ფასდაკლება",d:"დაჯავშნეთ კბილების პროფესიული წმენდა მეგობართან ერთად და ორივემ ისარგებლეთ 20%-იანი ფასდაკლებით."},
+ {pct:"20%",tag:"პირველ ვიზიტზე",t:"პირველი ვიზიტის ფასდაკლება",d:"პირველად სტუმრობთ ჩვენს კლინიკას? ისარგებლეთ 20%-იანი ფასდაკლებით კბილების პროფესიულ წმენდაზე."},
+ {pct:"15%",tag:"თითოეულს",t:"ოჯახური ფასდაკლება",d:"დაჯავშნეთ კბილების პროფესიული წმენდა ოჯახის ორი ან მეტი წევრისთვის და თითოეულმა ისარგებლეთ 15%-იანი ფასდაკლებით."},
+ {pct:"20%",tag:"სტუდენტს",t:"სტუდენტური შეთავაზება",d:"სტუდენტი ხართ? ისარგებლეთ 20%-იანი ფასდაკლებით კბილების პროფესიულ წმენდაზე სტუდენტის სტატუსის დამადასტურებელი დოკუმენტის წარდგენის შემთხვევაში."},
+ {pct:"20%",tag:"ორივეს",t:"შეთავაზება წყვილებისთვის",d:"დაჯავშნეთ კბილების პროფესიული წმენდა თქვენს მეორე ნახევართან ერთად და ორივემ ისარგებლეთ 20%-იანი ფასდაკლებით."}
+];
+const MAX=3, picked=new Set();
+const list=document.getElementById('list'), send=document.getElementById('send'), count=document.getElementById('count'), toast=document.getElementById('toast');
+const tick='<svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="#2B211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+OFFERS.forEach((o,i)=>{
+  const b=document.createElement('button'); b.className='offer'; b.type='button';
+  b.innerHTML=`<div class="pct"><b>${o.pct}</b></div><div><div class="num">შეთავაზება ${i+1} · ${o.tag}</div><h2>${o.t}</h2></div><p>${o.d}</p><span class="tick">${tick}</span>`;
+  b.onclick=()=>{
+    if(picked.has(i)){picked.delete(i);b.classList.remove('on')}
+    else if(picked.size>=MAX){show('შეგიძლიათ აირჩიოთ მაქსიმუმ 3. ჯერ მოხსენით ერთი.');return}
+    else{picked.add(i);b.classList.add('on')}
+    update();
+  };
+  list.appendChild(b);
+});
+function update(){count.innerHTML=`არჩეულია <b>${picked.size}</b> / ${MAX}`;send.disabled=picked.size===0}
+function show(m){toast.textContent=m;toast.classList.add('show');clearTimeout(show.t);show.t=setTimeout(()=>toast.classList.remove('show'),2600)}
+send.onclick=async()=>{
+  const sel=[...picked].sort((a,b)=>a-b);
+  const text='Likedent, არჩეული შეთავაზებები:\n'+sel.map(i=>`${i+1}. ${OFFERS[i].t}`).join('\n');
+  if(navigator.share){try{await navigator.share({text});return}catch(e){if(e.name==='AbortError')return}}
+  try{await navigator.clipboard.writeText(text);show('ტექსტი დაკოპირდა. ჩასვით შეტყობინებაში.')}
+  catch(e){location.href='https://wa.me/?text='+encodeURIComponent(text)}
+};
+</script>
+</body></html>
