@@ -5,16 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>კლიენტის აპის მართვა</title>
-<link rel="stylesheet" href="hub.css">
+<link rel="stylesheet" href="hub.css?v=12">
 <style>
 html,body{margin:0;min-height:100%}
-body{background:var(--h-bg);color:var(--h-fg);font-family:"Noto Sans Georgian",-apple-system,BlinkMacSystemFont,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:var(--h-bg);color:var(--h-fg);font-family:var(--font);-webkit-font-smoothing:antialiased}
 .wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px;display:flex;flex-direction:column;gap:14px}
 .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .top .t{flex:1;min-width:200px;line-height:1.15}
-.top .t small{display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--h-gold)}
-.top .t b{font-size:24px}
-.box{background:var(--h-card);border:1px solid var(--h-line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--h-shadow)}
+.top .t small{display:block;font-size:14px;font-weight:600;color:var(--slate);margin-bottom:4px}
+.top .t b{font-size:34px;letter-spacing:-.022em;line-height:1.1}
+.box{background:var(--h-card);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--h-shadow)}
 .box h2{margin:0;font-size:16px}
 .box p{margin:0;font-size:13px;color:var(--h-sub);line-height:1.5}
 .sw{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--h-line);font-size:14.5px}
@@ -39,15 +39,15 @@ body.dark .msg.err{color:#F2B8B5}
 <div class="wrap">
   <div class="top">
     <div class="t"><small id="cname">Likedent</small><b>კლიენტის აპის მართვა</b></div>
-    <a class="hbtn" id="clientLink" target="_blank" rel="noopener">კლიენტის აპი ↗</a>
-    <a class="hbtn" href="#" id="studioLink">სტუდიო</a>
-    <button class="hbtn" type="button" id="theme">☾ / ☀︎</button>
+    <a class="btn" id="clientLink" target="_blank" rel="noopener">კლიენტის აპი ↗</a>
+    <a class="btn" href="#" id="studioLink">სტუდიო</a>
+    <button class="btn" type="button" id="theme">☾ / ☀︎</button>
   </div>
 
   <section class="box" id="keyBox">
     <h2>გუნდის კოდი</h2>
     <p>იგივე კოდი, რაც სტუდიოში. ამ მოწყობილობაზე ერთხელ შეიყვანე. კოდით კლიენტის აპშიც ყველაფერს დაინახავ PIN-ის გარეშე.</p>
-    <div class="row"><input class="hbtn" style="flex:1;min-width:0;font-weight:500" id="key" type="password" autocomplete="off" placeholder="გუნდის კოდი"><button class="hbtn gold" type="button" id="keySave">შესვლა</button></div>
+    <div class="row"><input class="btn" style="flex:1;min-width:0;font-weight:500" id="key" type="password" autocomplete="off" placeholder="გუნდის კოდი"><button class="btn primary" type="button" id="keySave">შესვლა</button></div>
     <div class="msg" id="keyMsg" role="status"></div>
   </section>
 
@@ -68,10 +68,10 @@ body.dark .msg.err{color:#F2B8B5}
     <section class="box">
       <h2>კლინიკის PIN</h2>
       <p id="pinState">კლინიკა ამ PIN-ით ხედავს პაციენტებს და ანალიტიკას. ახალი PIN ძველს ცვლის, ყველა ტელეფონზე ხელახლა შესვლა დასჭირდებათ.</p>
-      <div class="row"><input class="hbtn" style="flex:1;min-width:0;font-weight:500;letter-spacing:.2em" id="pin" inputmode="numeric" maxlength="6" placeholder="6 ციფრი" autocomplete="off"><button class="hbtn" type="button" id="pinGen">შემთხვევითი</button></div>
+      <div class="row"><input class="btn" style="flex:1;min-width:0;font-weight:500;letter-spacing:.2em" id="pin" inputmode="numeric" maxlength="6" placeholder="6 ციფრი" autocomplete="off"><button class="btn" type="button" id="pinGen">შემთხვევითი</button></div>
     </section>
 
-    <div class="row"><button class="hbtn gold" type="button" id="save">შენახვა</button><span class="msg" id="msg" role="status"></span></div>
+    <div class="row"><button class="btn primary" type="button" id="save">შენახვა</button><span class="msg" id="msg" role="status"></span></div>
   </div>
 </div>
 <script src="core.js"></script>
@@ -85,7 +85,7 @@ let CFG = null, S = null, spendEdit = {};
 const setTheme = t => { document.body.classList.toggle('dark', t === 'dark'); ls.set('igs_theme', t); };
 setTheme(ls.get('igs_theme') || 'light');
 $('#theme').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
-$('#clientLink').href = 'preview.html?c=' + CLIENT; $('#studioLink').href = 'studio.html?c=' + CLIENT;
+$('#clientLink').href = 'app.html?c=' + CLIENT; $('#studioLink').href = 'studio.html?c=' + CLIENT;
 const say = (el, m, err) => { el.textContent = m; el.classList.toggle('err', !!err); };
 
 const months = (() => { const d = new Date(), out = []; for(let i = -1; i < 12; i++){ const x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}`); } return out; })();
