@@ -419,3 +419,10 @@ body.dark .kpi.lead-kpi small,body.dark .kpi.lead-kpi span{color:rgba(28,31,34,.
   .hubtoast{bottom:calc(var(--tabbar) + 18px)}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+/* Google sign-in */
+.lock .gbtn{display:flex;justify-content:center;min-height:44px}
+.linkbtn{background:none;border:0;padding:4px;font:500 14px/1.3 var(--font);color:var(--emerald);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+body.dark .linkbtn{color:#5FC7A6}
+.linkbtn:focus-visible{outline:2px solid var(--mustard);outline-offset:2px;border-radius:6px}
+#ptSub .who{display:inline-block;margin-left:6px;color:var(--slate);font-size:13px}
+#ptSub .who .linkbtn{font-size:13px}

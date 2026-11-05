@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>კლიენტის აპის მართვა</title>
-<link rel="stylesheet" href="hub.css?v=12">
+<link rel="stylesheet" href="hub.css?v=13">
 <style>
 html,body{margin:0;min-height:100%}
 body{background:var(--h-bg);color:var(--h-fg);font-family:var(--font);-webkit-font-smoothing:antialiased}
@@ -32,6 +32,12 @@ body{background:var(--h-bg);color:var(--h-fg);font-family:var(--font);-webkit-fo
 #main{display:contents}#main[hidden]{display:none}
 .msg{font-size:13px;min-height:18px;color:var(--h-emer)}
 .msg.err{color:#B3261E}
+.u{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--h-line)}
+.u:first-child{border-top:0}
+.u input{flex:1;min-width:0}
+.u select{width:auto}
+.u .x{flex:none;width:38px;height:38px;border-radius:50%;justify-content:center;padding:0}
+#gbtn{min-height:44px}
 body.dark .msg.err{color:#F2B8B5}
 </style>
 </head>
@@ -45,8 +51,10 @@ body.dark .msg.err{color:#F2B8B5}
   </div>
 
   <section class="box" id="keyBox">
-    <h2>გუნდის კოდი</h2>
-    <p>იგივე კოდი, რაც სტუდიოში. ამ მოწყობილობაზე ერთხელ შეიყვანე. კოდით კლიენტის აპშიც ყველაფერს დაინახავ PIN-ის გარეშე.</p>
+    <h2>შესვლა</h2>
+    <p>შედი შენი Gmail-ით. ამ მოწყობილობაზე შესვლა 30 დღე ინახება და კლიენტის აპშიც მოქმედებს.</p>
+    <div id="gbtn"></div>
+    <p>ან გუნდის კოდით, რომელიც სტუდიოშიც გამოიყენება:</p>
     <div class="row"><input class="btn" style="flex:1;min-width:0;font-weight:500" id="key" type="password" autocomplete="off" placeholder="გუნდის კოდი"><button class="btn primary" type="button" id="keySave">შესვლა</button></div>
     <div class="msg" id="keyMsg" role="status"></div>
   </section>
@@ -66,7 +74,15 @@ body.dark .msg.err{color:#F2B8B5}
     </section>
 
     <section class="box">
-      <h2>კლინიკის PIN</h2>
+      <h2>ვის აქვს წვდომა</h2>
+      <p>ამ Gmail-ებით შესვლისას პაციენტები და ანალიტიკა ჩანს. მეილს თუ წაშლი, ის წვდომას მაშინვე კარგავს. „გუნდს“ ამ გვერდის გახსნაც შეუძლია.</p>
+      <div id="users"></div>
+      <div class="row"><button class="btn" type="button" id="userAdd">+ მეილის დამატება</button></div>
+      <p>ახალი მეილი Google Cloud-ის სატესტო სიაშიც უნდა დაემატოს (Likedent Hub → Audience → Test users), სანამ აპი ტესტის რეჟიმშია.</p>
+    </section>
+
+    <section class="box">
+      <h2>კლინიკის PIN (სარეზერვო)</h2>
       <p id="pinState">კლინიკა ამ PIN-ით ხედავს პაციენტებს და ანალიტიკას. ახალი PIN ძველს ცვლის, ყველა ტელეფონზე ხელახლა შესვლა დასჭირდებათ.</p>
       <div class="row"><input class="btn" style="flex:1;min-width:0;font-weight:500;letter-spacing:.2em" id="pin" inputmode="numeric" maxlength="6" placeholder="6 ციფრი" autocomplete="off"><button class="btn" type="button" id="pinGen">შემთხვევითი</button></div>
     </section>
@@ -81,7 +97,19 @@ const KEYNAME = 'igs_key_' + CLIENT;
 const TABS = [['content','კონტენტი','ინსტაგრამის პოსტები, დადასტურება და კომენტარები'],['patients','პაციენტები','მოთხოვნები სამ ეტაპად'],['analytics','ანალიტიკა','ლიდები, ჩაწერა და ფასი არხების მიხედვით']];
 const CH = [['facebook','Facebook'],['instagram','Instagram'],['google','Google'],['tiktok','TikTok'],['sms','SMS'],['other','სხვა']];
 const MON = ['იანვარი','თებერვალი','მარტი','აპრილი','მაისი','ივნისი','ივლისი','აგვისტო','სექტემბერი','ოქტომბერი','ნოემბერი','დეკემბერი'];
-let CFG = null, S = null, spendEdit = {};
+const SESKEY = 'hub_ses_' + CLIENT;
+let CFG = null, S = null, spendEdit = {}, USERS = [];
+const auth = () => ls.get(SESKEY) ? {session: ls.get(SESKEY)} : {key: ls.get(KEYNAME)};
+const escA = v => String(v).replace(/[&"<>]/g, c => ({'&':'&amp;','"':'&quot;','<':'&lt;','>':'&gt;'}[c]));
+function renderUsers(){
+  $('#users').innerHTML = USERS.map((u, i) => `<div class="u"><input class="btn" style="font-weight:500" type="email" data-ue="${i}" value="${escA(u.email)}" placeholder="name@gmail.com" autocomplete="off">
+    <select class="btn" data-ur="${i}"><option value="clinic" ${u.role !== 'team' ? 'selected' : ''}>კლინიკა</option><option value="team" ${u.role === 'team' ? 'selected' : ''}>გუნდი</option></select>
+    <button class="btn x" type="button" data-ux="${i}" aria-label="წაშლა">✕</button></div>`).join('');
+}
+$('#users').addEventListener('input', e => { const t = e.target; if(t.dataset.ue) USERS[t.dataset.ue].email = t.value.trim(); if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
+$('#users').addEventListener('change', e => { const t = e.target; if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
+$('#users').addEventListener('click', e => { const x = e.target.closest('[data-ux]'); if(x){ USERS.splice(+x.dataset.ux, 1); renderUsers(); } });
+$('#userAdd').onclick = () => { USERS.push({email:'', role:'clinic'}); renderUsers(); $('#users').lastElementChild.querySelector('input').focus(); };
 const setTheme = t => { document.body.classList.toggle('dark', t === 'dark'); ls.set('igs_theme', t); };
 setTheme(ls.get('igs_theme') || 'light');
 $('#theme').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');
@@ -101,12 +129,26 @@ $('#spend').addEventListener('input', e => { const i = e.target.closest('[data-c
 function render(){
   $('#tabs').innerHTML = TABS.map(([k, t, d]) => `<label class="sw"><span>${t}<small>${d}</small></span><input type="checkbox" data-tab="${k}" ${S.tabs[k] ? 'checked' : ''}></label>`).join('');
   $('#pinState').firstChild.textContent = (S.hasPin ? 'PIN დაყენებულია. ' : 'PIN ჯერ არ არის დაყენებული: კლინიკა პაციენტებს ვერ ნახავს. ') + 'კლინიკა ამ PIN-ით ხედავს პაციენტებს და ანალიტიკას. ახალი PIN ძველს ცვლის, ყველა ტელეფონზე ხელახლა შესვლა დასჭირდებათ.';
-  renderSpend();
+  renderSpend(); renderUsers();
   $('#keyBox').hidden = true; $('#main').hidden = false;
 }
-async function load(){
-  const r = await api.post(CFG, {action:'hubLoad', key: ls.get(KEYNAME)});
-  S = r.settings; render();
+async function load(idToken){
+  const r = await api.post(CFG, Object.assign({action:'hubLoad'}, idToken ? {idToken} : auth()));
+  if(r.role !== 'team'){ ls.set(SESKEY, ''); throw new Error('team only'); }
+  if(r.session) ls.set(SESKEY, r.session);
+  S = r.settings; USERS = (r.users || []).map(u => Object.assign({}, u)); render();
+}
+function googleBtn(clientId){
+  if(!clientId) return;
+  const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+  s.onload = () => {
+    google.accounts.id.initialize({client_id: clientId, ux_mode: 'popup', callback: async r => {
+      try{ await load(r.credential); }
+      catch(e){ say($('#keyMsg'), /not allowed: (.+)/.test(e.message) ? RegExp.$1 + '-ს წვდომა არ აქვს.' : (/team only/.test(e.message) ? 'ეს მეილი კლინიკისაა, მართვის გვერდისთვის „გუნდი“ უნდა იყოს.' : 'შესვლა ვერ მოხერხდა: ' + e.message), 1); }
+    }});
+    google.accounts.id.renderButton($('#gbtn'), {theme: document.body.classList.contains('dark') ? 'filled_black' : 'outline', size: 'large', shape: 'pill', text: 'signin_with', locale: 'ka', width: 280});
+  };
+  document.head.appendChild(s);
 }
 $('#keySave').onclick = async () => {
   const k = $('#key').value.trim(); if(k.length < 6){ say($('#keyMsg'), 'კოდი მინიმუმ 6 სიმბოლოა.', 1); return; }
@@ -118,18 +160,22 @@ $('#save').onclick = async () => {
   const pin = $('#pin').value.trim();
   if(pin && !/^\d{6}$/.test(pin)){ say($('#msg'), 'PIN ზუსტად 6 ციფრი უნდა იყოს.', 1); return; }
   const tabs = {}; document.querySelectorAll('[data-tab]').forEach(i => tabs[i.dataset.tab] = i.checked);
+  const users = USERS.filter(u => u.email);
+  if(users.some(u => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u.email))){ say($('#msg'), 'ერთ-ერთი მეილი არასწორადაა ჩაწერილი.', 1); return; }
+  if(!users.some(u => u.role === 'team')){ say($('#msg'), 'სიაში ერთი „გუნდის“ მეილი მაინც უნდა დარჩეს.', 1); return; }
   const spend = {}; Object.keys(spendEdit).forEach(m => spend[m] = Object.assign({}, (S.spend || {})[m] || {}, spendEdit[m]));
   $('#save').disabled = true; say($('#msg'), 'ინახება…');
   try{
-    const r = await api.post(CFG, {action:'hubSettings', key: ls.get(KEYNAME), settings: {tabs, spend}, pin});
-    S = r.settings; spendEdit = {}; $('#pin').value = ''; render();
+    const r = await api.post(CFG, Object.assign({action:'hubSettings', settings: {tabs, spend}, users, pin}, auth()));
+    S = r.settings; spendEdit = {}; USERS = (r.users || []).map(u => Object.assign({}, u)); $('#pin').value = ''; render();
     say($('#msg'), pin ? `შენახულია ✓ ახალი PIN: ${pin} (გაუგზავნე კლინიკას)` : 'შენახულია ✓');
   }catch(e){ say($('#msg'), 'ვერ შეინახა: ' + e.message, 1); }
   $('#save').disabled = false;
 };
 (async () => {
   try{ CFG = await loadConfig(); $('#cname').textContent = CFG.client || CLIENT; }catch(e){ say($('#keyMsg'), 'კონფიგი ვერ ჩაიტვირთა.', 1); return; }
-  if(ls.get(KEYNAME)){ $('#key').value = ls.get(KEYNAME); try{ await load(); }catch(e){ say($('#keyMsg'), /unknown/.test(e.message) ? 'Apps Script-ში ჰაბი ჯერ არ არის დამატებული.' : 'შეიყვანე გუნდის კოდი.', 1); } }
+  try{ const p = await api.post(CFG, {action:'hubPublic'}); googleBtn(p.clientId); }catch(e){}
+  if(ls.get(SESKEY) || ls.get(KEYNAME)){ if(ls.get(KEYNAME)) $('#key').value = ls.get(KEYNAME); try{ await load(); }catch(e){ ls.set(SESKEY, ''); say($('#keyMsg'), /unknown/.test(e.message) ? 'Apps Script-ში ჰაბი ჯერ არ არის დამატებული.' : 'შედი Google-ით ან გუნდის კოდით.', 1); } }
 })();
 })();
 </script>

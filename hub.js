@@ -1,12 +1,13 @@
 /* Like Dent client hub, built around the Instagram preview in preview.html.
    - Content: the existing Instagram phone preview (untouched: approvals, comments, reels),
      plus read-and-approve previews for Instagram on a computer, Facebook and YouTube.
-   - Patients: new -> booked -> done pipeline (Apps Script Hub.gs, clinic PIN).
+   - Patients: new -> booked -> done pipeline (Apps Script Hub.gs). Sign in with Google
+     (emails on the list in hub-admin), the clinic PIN as a fallback, or the studio team key.
    - Analytics: leads, bookings, cost per lead by channel.
    ?demo=1 shows sample patients offline. */
 (() => {
 const DEMO = Q.get('demo') === '1';
-const PINKEY = 'hub_pin_' + CLIENT, PLATKEY = 'hub_plat_' + CLIENT;
+const PINKEY = 'hub_pin_' + CLIENT, PLATKEY = 'hub_plat_' + CLIENT, SESKEY = 'hub_ses_' + CLIENT;
 const STAGES = [
   {id:'new',    label:'ახალი პაციენტი', short:'ახალი',    next:'booked', nextLabel:'დაიჯავშნა'},
   {id:'booked', label:'დაჯავშნილი',      short:'დაჯავშნა', next:'done',   nextLabel:'ჩაიტარა'},
@@ -41,6 +42,8 @@ const chUrl = f => f ? BASE + 'channels/' + f : '';
 let CFGH = null, TABS = {content:true, patients:false, analytics:false}, cur = 'content', plat = ls.get(PLATKEY) || 'ig';
 let LEADS = [], SPEND = {}, ROLE = '', loaded = false, busy = 0, pickStage = 'new', showLost = false, period = 'month';
 const pin = () => ls.get(PINKEY) || '';
+const session = () => ls.get(SESKEY) || '';
+let GCLIENT = '', ME = '', usePin = false;
 const teamKey = () => ls.get('igs_key_' + CLIENT) || '';
 const me = () => (ls.get('igp_name') || '').trim();
 const money = v => (Math.round(v * 10) / 10).toLocaleString('ka-GE', {maximumFractionDigits: 1}) + ' ₾';
@@ -348,16 +351,51 @@ window.refreshViews = function(){ igRefresh.apply(this, arguments); renderPlat()
 /* ---------- patients ---------- */
 async function call(body){
   if(DEMO) return demoCall(body);
-  if(!body.pin){ delete body.pin; if(teamKey()) body.key = teamKey(); }
+  if(!body.idToken){
+    if(session()){ body.session = session(); delete body.pin; }
+    else if(!body.pin){ delete body.pin; if(teamKey()) body.key = teamKey(); }
+  }
   return api.post(CFGH, body);
 }
-async function loadHub(silent){
-  if(!pin() && !teamKey() && !DEMO){ loaded = false; render(); return; }
-  try{ take(await call({action:'hubLoad', pin: pin()})); loaded = true; render(); }
-  catch(e){
-    if(/pin|tries|key/.test(String(e.message))){ ls.set(PINKEY, ''); loaded = false; render(/tries/.test(e.message) ? 'ძალიან ბევრი მცდელობა. სცადეთ 10 წუთში.' : (silent ? '' : 'PIN არასწორია. სცადეთ თავიდან.')); }
+function authError(e, silent){
+  const m = String(e.message || '');
+  if(/not allowed: (.+)/.test(m)){ ls.set(SESKEY, ''); return `${RegExp.$1}-ს წვდომა არ აქვს. სთხოვეთ Like Dent-ის მარკეტინგის გუნდს, რომ სიაში დაგამატოთ.`; }
+  if(/session|google/.test(m)){ ls.set(SESKEY, ''); return silent ? '' : 'შესვლის ვადა გავიდა. შედით თავიდან.'; }
+  if(/pin|tries|key/.test(m)){ ls.set(PINKEY, ''); return /tries/.test(m) ? 'ძალიან ბევრი მცდელობა. სცადეთ 10 წუთში.' : (silent ? '' : 'PIN არასწორია. სცადეთ თავიდან.'); }
+  return null;
+}
+async function loadHub(silent, idToken){
+  if(!idToken && !session() && !pin() && !teamKey() && !DEMO){ loaded = false; render(); return; }
+  try{
+    const r = await call(idToken ? {action:'hubLoad', idToken} : {action:'hubLoad', pin: pin()});
+    if(r.session) ls.set(SESKEY, r.session);
+    ME = r.me || ''; take(r); loaded = true; render();
+  }catch(e){
+    const msg = authError(e, silent);
+    if(msg !== null){ loaded = false; render(msg); }
     else if(!silent) toast('კავშირი ვერ დამყარდა. შეამოწმეთ ინტერნეტი და სცადეთ თავიდან.');
   }
+}
+/* Sign in with Google: Google's own button; the server checks the email against the list */
+let gsiP = null;
+function gsi(){
+  return gsiP = gsiP || new Promise((ok, no) => {
+    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = () => { google.accounts.id.initialize({client_id: GCLIENT, callback: r => loadHub(false, r.credential), ux_mode: 'popup', context: 'signin'}); ok(); };
+    s.onerror = () => { gsiP = null; no(); }; document.head.appendChild(s);
+  });
+}
+function drawGoogle(){
+  document.querySelectorAll('[data-gbtn]').forEach(async el => {
+    if(el.childElementCount) return;
+    try{ await gsi(); google.accounts.id.renderButton(el, {theme: isDark() ? 'filled_black' : 'outline', size: 'large', shape: 'pill', text: 'signin_with', locale: 'ka', width: 280}); }
+    catch(e){ el.textContent = 'Google-ის ღილაკი ვერ ჩაიტვირთა. შეამოწმეთ ინტერნეტი.'; }
+  });
+}
+function signOut(){
+  ls.set(SESKEY, ''); ls.set(PINKEY, ''); ME = '';
+  try{ google.accounts.id.disableAutoSelect(); }catch(e){}
+  loaded = false; render();
 }
 function take(r){
   LEADS = (r.leads || []).sort((a, b) => b.created - a.created);
@@ -367,15 +405,24 @@ function take(r){
 }
 function render(err){
   $('#ptAdd').hidden = !loaded;
-  if(!loaded){ $('#ptBody').innerHTML = lockHTML(err); $('#anBody').innerHTML = lockHTML(err); return; }
+  if(!loaded){ $('#ptBody').innerHTML = lockHTML(err); $('#anBody').innerHTML = lockHTML(err); drawGoogle(); return; }
   if(cur === 'patients') renderPatients();
   if(cur === 'analytics') renderAnalytics();
 }
-const lockHTML = err => `<form class="lock" data-lock>
+const lockHTML = err => (GCLIENT && !usePin) ? `<div class="lock">
+  <h2>შედით Google-ით</h2><p>პაციენტების მონაცემებს ხედავენ მხოლოდ კლინიკის დაშვებული Gmail-ები. ამ მოწყობილობაზე შესვლა 30 დღე ინახება.</p>
+  <div class="gbtn" data-gbtn></div>
+  <div class="err" role="alert">${esc(err || '')}</div>
+  <button class="linkbtn" type="button" data-usepin>PIN-ით შესვლა</button></div>` : `<form class="lock" data-lock>
   <h2>შეიყვანეთ კლინიკის PIN</h2><p>პაციენტების მონაცემები დაცულია. PIN ერთხელ შეგყავთ ამ მოწყობილობაზე.</p>
   <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="PIN" required>
   <div class="err" role="alert">${esc(err || '')}</div>
-  <button class="btn primary" type="submit">შესვლა</button></form>`;
+  <button class="btn primary" type="submit">შესვლა</button>${GCLIENT ? '<button class="linkbtn" type="button" data-usegoogle>Google-ით შესვლა</button>' : ''}</form>`;
+document.addEventListener('click', e => {
+  if(e.target.closest('[data-usepin]')){ usePin = true; render(); }
+  else if(e.target.closest('[data-usegoogle]')){ usePin = false; render(); }
+  else if(e.target.closest('[data-signout]')) signOut();
+});
 document.addEventListener('submit', async e => {
   const f = e.target.closest('[data-lock]'); if(!f) return;
   e.preventDefault();
@@ -398,6 +445,7 @@ function renderPatients(){
   const by = s => LEADS.filter(l => l.stage === s);
   const nNew = by('new').length, lost = by('lost');
   $('#ptSub').textContent = nNew ? `${nNew} ახალი მოთხოვნა ელოდება ზარს.` : 'ახალი მოთხოვნები აქ გამოჩნდება, საიტიდან, რეკლამიდან და ზარებიდან.';
+  if(ME || session()) $('#ptSub').insertAdjacentHTML('beforeend', ` <span class="who">${esc(ME)} <button class="linkbtn" type="button" data-signout>გასვლა</button></span>`);
   const chips = [...STAGES, LOST].map(s => `<button type="button" class="chip" data-pick="${s.id}" aria-pressed="${pickStage === s.id}">${s.short}<i>${by(s.id).length}</i></button>`).join('');
   const col = (s, extra = '') => {
     const items = by(s.id);
@@ -540,7 +588,7 @@ async function boot(){
   document.querySelectorAll('[data-client]').forEach(e => e.textContent = CFGH.client || 'Like Dent');
   if(DEMO) TABS = {content:true, patients:true, analytics:true};
   else if(CFGH.api){
-    try{ const r = await api.post(CFGH, {action:'hubPublic'}); TABS = Object.assign({content:true, patients:false, analytics:false}, (r.settings || {}).tabs || {}); }
+    try{ const r = await api.post(CFGH, {action:'hubPublic'}); TABS = Object.assign({content:true, patients:false, analytics:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; }
     catch(e){ TABS = {content:true, patients:false, analytics:false}; }
   }
   setupNav();
