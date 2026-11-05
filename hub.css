@@ -426,3 +426,4 @@ body.dark .linkbtn{color:#5FC7A6}
 .linkbtn:focus-visible{outline:2px solid var(--mustard);outline-offset:2px;border-radius:6px}
 #ptSub .who{display:inline-block;margin-left:6px;color:var(--slate);font-size:13px}
 #ptSub .who .linkbtn{font-size:13px}
+#ptAdd[hidden],.btn[hidden]{display:none}
