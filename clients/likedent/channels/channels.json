@@ -1,0 +1,18 @@
+{
+  "_note": "Real channel details for the Facebook and YouTube previews, copied from the live pages on 5 Nov 2026. Profile photos use the Instagram avatar (same logo).",
+  "facebook": {
+    "name": "Likedent",
+    "followers": "612",
+    "following": "4",
+    "cover": "fb-cover.jpg",
+    "url": "https://www.facebook.com/p/Like-DENT-100034368850700/"
+  },
+  "youtube": {
+    "name": "Likedent",
+    "handle": "@Likedent.Batumi",
+    "subscribers": "3",
+    "videos": "3",
+    "banner": "yt-banner.jpg",
+    "url": "https://www.youtube.com/@Likedent.Batumi"
+  }
+}
