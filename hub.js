@@ -7,6 +7,9 @@
    ?demo=1 shows sample patients offline. */
 (() => {
 const DEMO = Q.get('demo') === '1';
+// a link to one post (?post=ID): keep the page covered until that post's window is open
+if(Q.get('post')) document.documentElement.classList.add('deeplink');
+const undeep = () => document.documentElement.classList.remove('deeplink');
 const PINKEY = 'hub_pin_' + CLIENT, PLATKEY = 'hub_plat_' + CLIENT, SESKEY = 'hub_ses_' + CLIENT;
 const STAGES = [
   {id:'new',    label:'ახალი პაციენტი', short:'ახალი',    next:'booked', nextLabel:'დაიჯავშნა'},
@@ -340,9 +343,10 @@ async function copyLink(id){
 function openFromLink(){
   const want = Q.get('post'); if(!want) return;
   const g = POSTS.find(p => p.id === want || (p.variants && p.variants.some(v => v.id === want)));
-  if(!g){ toast('ეს პოსტი აღარ არის გეგმაში.'); return; }
+  if(!g){ undeep(); toast('ეს პოსტი აღარ არის გეგმაში.'); return; }
   openPm(g.id);
   if(g.variants) pmVar = Math.max(0, g.variants.findIndex(v => v.id === want)), renderPm(true);
+  undeep();
 }
 /* re-render the other views whenever the Instagram preview refreshes its data */
 const igRefresh = window.refreshViews;
@@ -582,18 +586,19 @@ $('#perSeg').addEventListener('click', e => { const p = e.target.closest('[data-
 
 /* ---------- boot ---------- */
 async function boot(){
-  try{ CFGH = await loadConfig(); }catch(e){ return; }
+  try{ CFGH = await loadConfig(); }catch(e){ undeep(); return; }
   try{ const r = await fetch(BASE + 'channels/channels.json', {cache:'no-store'}); if(r.ok) CH = Object.assign(CH, await r.json()); }catch(e){}
   document.querySelectorAll('[data-av]').forEach(i => i.src = mediaUrl(CFGH.avatar));
   document.querySelectorAll('[data-client]').forEach(e => e.textContent = CFGH.client || 'Like Dent');
+  // the Instagram data arrives a moment later; draw the other platforms (and open a linked post) as soon as it is there
+  const wait = setInterval(() => { if(ready()){ clearInterval(wait); renderPlat(); openFromLink(); } }, 40);
+  setTimeout(undeep, 8000);   // never leave the page covered if something fails
   if(DEMO) TABS = {content:true, patients:true, analytics:true};
   else if(CFGH.api){
     try{ const r = await api.post(CFGH, {action:'hubPublic'}); TABS = Object.assign({content:true, patients:false, analytics:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; }
     catch(e){ TABS = {content:true, patients:false, analytics:false}; }
   }
   setupNav();
-  // the Instagram data arrives a moment later; draw the other platforms once it is there
-  const wait = setInterval(() => { if(ready()){ clearInterval(wait); renderPlat(); openFromLink(); } }, 300);
   setInterval(() => { if(document.visibilityState === 'visible' && cur !== 'content' && loaded && !busy && sh.hidden) loadHub(true); }, 30000);
 }
 boot();

@@ -427,3 +427,10 @@ body.dark .linkbtn{color:#5FC7A6}
 #ptSub .who{display:inline-block;margin-left:6px;color:var(--slate);font-size:13px}
 #ptSub .who .linkbtn{font-size:13px}
 #ptAdd[hidden],.btn[hidden]{display:none}
+/* link to one post: cover the page until the post window is open */
+html.deeplink body>*{visibility:hidden}
+html.deeplink #pm,html.deeplink #ovhost{visibility:visible}
+html.deeplink body::before{content:"";position:fixed;inset:0;background:rgba(20,22,24,.88);z-index:0}
+html.deeplink body::after{content:"";position:fixed;left:50%;top:50%;width:28px;height:28px;margin:-14px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;animation:dlspin .8s linear infinite;z-index:1}
+@keyframes dlspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){html.deeplink body::after{animation:none}}
