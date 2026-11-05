@@ -21,7 +21,10 @@ const STAGE_LABEL = {new:'ახალი პაციენტი', booked:'დ
 const CHANNELS = {website:'საიტი', facebook:'Facebook', instagram:'Instagram', google:'Google', tiktok:'TikTok', sms:'SMS', phone:'ზარი', walkin:'კლინიკაში მოვიდა', referral:'რეკომენდაცია', other:'სხვა'};
 const SERVICES = ['კონსულტაცია','კბილი ან ღრძილი მაწუხებს','წმენდა და შემოწმება','კბილის აღდგენა ან ჩანაცვლება','ღიმილის გალამაზება','ბავშვისთვის','სხვა'];
 const MONTHS = ['იან','თებ','მარ','აპრ','მაი','ივნ','ივლ','აგვ','სექ','ოქტ','ნოე','დეკ'];
-const PLATS = [['ig','Instagram','Instagram'],['igweb','Instagram კომპიუტერზე','კომპიუტერი'],['fb','Facebook','Facebook'],['yt','YouTube','YouTube']];
+// each network has a phone and a computer view; the view key is what gets stored and rendered
+const NETS = [['ig','Instagram'],['fb','Facebook'],['yt','YouTube']];
+const VIEWS = {ig:{m:'ig', d:'igweb'}, fb:{m:'fbm', d:'fb'}, yt:{m:'ytm', d:'yt'}};
+const VIEW_OF = {}; Object.entries(VIEWS).forEach(([n, v]) => { VIEW_OF[v.m] = [n, 'm']; VIEW_OF[v.d] = [n, 'd']; });
 const SV = (d, w = 22) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const I = {
   content: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M3.5 9.5h17M9.5 9.5v11"/>'),
@@ -34,6 +37,8 @@ const I = {
   phone: SV('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>', 16),
   chat: SV('<path d="M20.5 11.5a8.5 8.5 0 0 1-12.4 7.6L3.5 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5z"/>', 16),
   close: SV('<path d="M6 6l12 12M18 6 6 18"/>', 18),
+  mobile: SV('<rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.5 18.5h3"/>', 17),
+  desktop: SV('<rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 16.5v4"/>', 17),
   link: SV('<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>', 18),
   play: '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
   reel: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
@@ -77,12 +82,15 @@ shell.innerHTML = `
   <main class="main">
     <section class="pane" id="pContent">
       <div class="head"><div class="ttl"><h1>კონტენტი</h1><p>ასე გამოჩნდება დაგეგმილი პოსტები. გახსენით პოსტი, დაადასტურეთ ან დაწერეთ, რა შევცვალოთ.</p></div>
-        <div class="seg" role="group" aria-label="პლატფორმა" id="platSeg"><span class="thumb"></span>${PLATS.map(([k, t, s]) => `<button type="button" data-plat="${k}" aria-pressed="false"><span class="lg">${t}</span><span class="sm" hidden>${s}</span></button>`).join('')}</div></div>
+        <div class="ctrls"><div class="seg" role="group" aria-label="პლატფორმა" id="platSeg"><span class="thumb"></span>${NETS.map(([k, t]) => `<button type="button" data-net="${k}" aria-pressed="false">${t}</button>`).join('')}</div>
+        <div class="seg dev" role="group" aria-label="მოწყობილობა" id="devSeg"><span class="thumb"></span><button type="button" data-dev="m" aria-pressed="false" title="ტელეფონი">${I.mobile}<span>ტელეფონი</span></button><button type="button" data-dev="d" aria-pressed="false" title="კომპიუტერი">${I.desktop}<span>კომპიუტერი</span></button></div></div></div>
       <div class="body">
         <div class="plat" data-plat="ig"></div>
         <div class="plat" data-plat="igweb" hidden></div>
         <div class="plat" data-plat="fb" hidden></div>
         <div class="plat" data-plat="yt" hidden></div>
+        <div class="plat" data-plat="fbm" hidden></div>
+        <div class="plat" data-plat="ytm" hidden></div>
       </div>
     </section>
     <section class="pane" id="pPatients" hidden>
@@ -120,10 +128,7 @@ function setSeg(seg, attr, val){
   seg.querySelectorAll(`[${attr}]`).forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === val)));
   requestAnimationFrame(() => moveThumb(seg));
 }
-const small = () => matchMedia('(max-width:860px)').matches;
-function labels(){ document.querySelectorAll('#platSeg .lg').forEach(e => e.hidden = small()); document.querySelectorAll('#platSeg .sm').forEach(e => e.hidden = !small()); }
-addEventListener('resize', () => { labels(); document.querySelectorAll('.seg').forEach(moveThumb); });
-labels();
+addEventListener('resize', () => document.querySelectorAll('.seg').forEach(moveThumb));
 // the web font changes button widths after load: keep the thumb under the pressed button
 const segRO = new ResizeObserver(es => es.forEach(en => moveThumb(en.target.closest('.seg'))));
 document.querySelectorAll('.seg button').forEach(b => segRO.observe(b));
@@ -158,16 +163,18 @@ function placeOverlays(){
 
 /* ---------- content: platforms ---------- */
 function showPlat(p){
-  if(!PLATS.some(x => x[0] === p)) p = 'ig';
+  if(!VIEW_OF[p]) p = 'ig';
   plat = p; ls.set(PLATKEY, p);
-  setSeg($('#platSeg'), 'data-plat', p);
+  setSeg($('#platSeg'), 'data-net', VIEW_OF[p][0]);
+  setSeg($('#devSeg'), 'data-dev', VIEW_OF[p][1]);
   document.querySelectorAll('.plat').forEach(el => el.hidden = el.dataset.plat !== p);
-  $('#pContent').classList.toggle('igphone', p === 'ig');
+  $('#pContent').classList.toggle('igphone', VIEW_OF[p][1] === 'm');
   if(p !== 'ig') pauseIg();
   placeOverlays();
   renderPlat();
 }
-$('#platSeg').addEventListener('click', e => { const b = e.target.closest('[data-plat]'); if(b) showPlat(b.dataset.plat); });
+$('#platSeg').addEventListener('click', e => { const b = e.target.closest('[data-net]'); if(b) showPlat(VIEWS[b.dataset.net][VIEW_OF[plat][1]]); });
+$('#devSeg').addEventListener('click', e => { const b = e.target.closest('[data-dev]'); if(b) showPlat(VIEWS[VIEW_OF[plat][0]][b.dataset.dev]); });
 
 const ready = () => typeof POSTS !== 'undefined' && POSTS.length && typeof CFG !== 'undefined' && CFG;
 const postsInOrder = () => displayOrder(POSTS);
@@ -185,6 +192,8 @@ function renderPlat(){
   if(plat === 'igweb') el.innerHTML = igwebHTML();
   if(plat === 'fb') el.innerHTML = fbHTML();
   if(plat === 'yt') el.innerHTML = ytHTML();
+  if(plat === 'fbm') el.innerHTML = fbmHTML();
+  if(plat === 'ytm') el.innerHTML = ytmHTML();
 }
 function igwebHTML(){
   const P = postsInOrder();
@@ -221,6 +230,48 @@ function ytHTML(){
     ${V.length ? `<div class="yt-sec">Shorts</div><div class="yt-shorts">${V.map(p => `<button type="button" class="ys" data-open="${esc(p.id)}"><div class="th"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${statusChip(p)}</div><b>${esc(cleanTitle(p.title))}</b><small>${p.variants ? p.variants.length + ' ვარიანტი' : p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}</small></button>`).join('')}</div>` : ''}
     ${S.length ? `<div class="yt-sec">პოსტები</div><div class="yt-posts">${S.map(p => `<article class="ycp" data-open="${esc(p.id)}" tabindex="0"><header><img src="${ytAv}" alt=""><b>${esc(ytName)}</b>${statusChip(p)}</header><p>${esc(capOf(p))}</p><img class="m" src="${mediaUrl(p.media[0])}" alt="" loading="lazy"></article>`).join('')}</div>` : ''}
   </div>`;
+}
+/* phone versions of Facebook and YouTube, inside the same phone frame as Instagram */
+const MI = {
+  back: SV('<path d="M15 5l-7 7 7 7"/>', 22), search: SV('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', 22),
+  more: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  like: SV('<path d="M7 10.5V20H4.5a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1zM7 10.5l3.6-6.3a1.9 1.9 0 0 1 3.5 1.2l-.6 3.6h5a2 2 0 0 1 2 2.4l-1.3 6.6a2.4 2.4 0 0 1-2.4 2H7"/>', 19),
+  comment: SV('<path d="M20.5 11.5a8.5 8.5 0 0 1-12.4 7.6L3.5 20.5l1.4-4.6A8.5 8.5 0 1 1 20.5 11.5z"/>', 19),
+  share: SV('<path d="M14 4.5 21 11l-7 6.5V14c-5 0-8.2 1.4-10.5 5 .8-5.3 3.6-9.4 10.5-10.3z"/>', 19),
+  bell: SV('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 22),
+  cast: SV('<path d="M3 8V6.5A1.5 1.5 0 0 1 4.5 5h15A1.5 1.5 0 0 1 21 6.5v11a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M3 12a7 7 0 0 1 7 7M3 15.5a3.5 3.5 0 0 1 3.5 3.5"/><circle cx="3.6" cy="18.4" r=".6" fill="currentColor"/>', 22),
+};
+const ytLogo = '<svg width="92" height="20" viewBox="0 0 92 20" aria-label="YouTube"><rect x="0" y="0.5" width="28" height="19" rx="5" fill="#FF0033"/><path d="M11.2 6v8l7-4z" fill="#fff"/><text x="31" y="15.6" font-family="Helvetica Neue,Arial,sans-serif" font-size="16.5" font-weight="700" letter-spacing="-.6" fill="currentColor">YouTube</text></svg>';
+function fbmHTML(){
+  const P = postsInOrder(), F = CH.facebook || {}, av = chUrl(F.avatar) || mediaUrl(CFG.avatar), name = F.name || CFG.displayName;
+  return `<div class="mframe fbm"><div class="mscroll">
+    <div class="fbm-top">${MI.back}<b>${esc(name)}</b>${MI.search}</div>
+    <div class="fbm-cover"><img src="${chUrl(F.cover) || coverImg()}" alt=""></div>
+    <div class="fbm-id"><img class="av" src="${av}" alt=""><b>${esc(name)}</b>
+      <small><b>${esc(F.followers || CFG.followers)}</b> გამომწერი${F.following ? `, <b>${esc(F.following)}</b> გამოწერილი` : ''}</small>
+      <div class="fbm-btns"><span class="pri">გამოწერა</span><span>შეტყობინება</span><span class="sq">${MI.more}</span></div></div>
+    <div class="fbm-tabs"><span class="on">პოსტები</span><span>შესახებ</span><span>ფოტოები</span><span>ვიდეოები</span></div>
+    ${P.map(p => `<article class="fbmp" data-open="${esc(p.id)}" tabindex="0">
+      <header><img src="${av}" alt=""><div><b>${esc(name)}</b><small>${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი პოსტი'}</small></div>${statusChip(p)}</header>
+      ${capOf(p) ? `<div class="tx">${esc(capOf(p))}</div>` : ''}
+      ${p.video ? `<div class="md"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy"><span class="play">${I.play}</span></div>`
+        : p.media.length > 1 ? `<div class="fbcar"><div class="fbtrack" data-fbtrack>${p.media.map(m => `<div class="fbcard"><img src="${mediaUrl(m)}" alt="" loading="lazy"></div>`).join('')}</div><button type="button" class="car-btn prev" data-fbgo="-1" aria-label="წინა" hidden>${IGI.prev}</button><button type="button" class="car-btn next" data-fbgo="1" aria-label="შემდეგი">${IGI.next}</button></div>`
+        : `<div class="md"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy"></div>`}
+      <footer><span>${MI.like}მოწონება</span><span>${MI.comment}კომენტარი</span><span>${MI.share}გაზიარება</span></footer>
+    </article>`).join('')}
+  </div></div>`;
+}
+function ytmHTML(){
+  const P = postsInOrder(), V = P.filter(p => p.video), S = P.filter(p => !p.video), Y = CH.youtube || {}, av = chUrl(Y.avatar) || mediaUrl(CFG.avatar), name = Y.name || CFG.client;
+  return `<div class="mframe ytm"><div class="mscroll">
+    <div class="ytm-top">${ytLogo}<span class="sp"></span>${MI.cast}${MI.bell}${MI.search}</div>
+    <div class="ytm-banner"><img src="${chUrl(Y.banner) || coverImg()}" alt=""></div>
+    <div class="ytm-id"><img src="${av}" alt=""><div><b>${esc(name)}</b><small>${esc(Y.handle || '@' + CFG.username)}</small><small>${Y.subscribers ? esc(Y.subscribers) + ' გამომწერი' : ''}${Y.subscribers && Y.videos ? ', ' : ''}${Y.videos ? esc(Y.videos) + ' ვიდეო' : ''}</small></div></div>
+    <div class="ytm-sub">გამოწერა</div>
+    <div class="ytm-tabs"><span>მთავარი</span><span>ვიდეოები</span><span class="on">Shorts</span><span>პოსტები</span></div>
+    ${V.length ? `<div class="ytm-shorts">${V.map(p => `<button type="button" class="yms" data-open="${esc(p.id)}" aria-label="${esc(cleanTitle(p.title))}"><img src="${mediaUrl(p.media[0])}" alt="" loading="lazy">${statusChip(p)}<b>${esc(cleanTitle(p.title))}</b></button>`).join('')}</div>` : ''}
+    ${S.length ? `<div class="ytm-sec">პოსტები</div>${S.map(p => `<article class="ympc" data-open="${esc(p.id)}" tabindex="0"><header><img src="${av}" alt=""><b>${esc(name)}</b>${statusChip(p)}</header>${capOf(p) ? `<p>${esc(capOf(p))}</p>` : ''}<img class="m" src="${mediaUrl(p.media[0])}" alt="" loading="lazy"></article>`).join('')}` : ''}
+  </div></div>`;
 }
 $('#pContent').addEventListener('click', e => {
   const go = e.target.closest('[data-fbgo]');
@@ -303,7 +354,7 @@ function sideYT(g, v){
 function renderPm(full){
   const g = POSTS.find(p => p.id === pmId); if(!g){ closePm(); return; }
   const v = g.variants ? g.variants[pmVar] : g;
-  const kind = plat === 'fb' ? 'fb' : plat === 'yt' ? 'yt' : 'ig';
+  const kind = VIEW_OF[plat] ? VIEW_OF[plat][0] : 'ig';
   const side = kind === 'fb' ? sideFB(g, v) : kind === 'yt' ? sideYT(g, v) : sideIG(g, v);
   if(full){
     $('#pm').className = 'pm pm--' + kind + (v.video ? ' is-video' : '');
