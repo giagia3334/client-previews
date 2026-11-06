@@ -102,6 +102,7 @@ shell.innerHTML = `
     <section class="pane" id="pTasks" hidden>
       <div class="head"><div class="ttl"><h1>დავალებები</h1><p id="tkSub">ვინ რას აკეთებს და რა ვადაში.</p></div><button type="button" class="icon-btn bell" id="tkBell" aria-label="შეტყობინებები" hidden><i hidden></i></button><button type="button" class="btn primary" id="tkAdd" hidden>${I.plus}ახალი დავალება</button></div>
       <div class="body" id="tkBody"></div>
+      <div class="qlinks" id="tkLinks" hidden></div>
     </section>
     <section class="pane" id="pAnalytics" hidden>
       <div class="head"><div class="ttl"><h1>ანალიტიკა</h1><p>რამდენი პაციენტი მოვიდა, საიდან და რა დაჯდა თითო.</p></div>
@@ -463,7 +464,7 @@ function take(r){
   SPEND = (r.settings || {}).spend || {}; ROLE = r.role || '';
   const n = LEADS.filter(l => l.stage === 'new').length;
   document.querySelectorAll('[data-tab="patients"] .n').forEach(d => { d.textContent = n; d.hidden = !n; });
-  CAN_TASKS = !!r.canTasks; TASKS = r.tasks || []; PEOPLE = r.people || []; GROUPS = r.groups || [];
+  CAN_TASKS = !!r.canTasks; LINKS = r.links || []; TASKS = r.tasks || []; PEOPLE = r.people || []; GROUPS = r.groups || [];
   loaded = true; navVis(); paintBadge();
   if(cur === 'tasks' && !CAN_TASKS) showTab('content');
   if(panelId) paintPanel();
@@ -600,6 +601,7 @@ function openLead(id){
 }
 
 /* ---------- tasks: monday-style board for the internal team (groups, people, status, updates) ---------- */
+let LINKS = [], qEdit = false;
 let TASKS = [], PEOPLE = [], GROUPS = [], CAN_TASKS = false, tkWho = 'all', tkQ = '', hideDone = false, popEl = null, panelId = null, dragging = false;
 const SEENKEY = 'hub_tk_seen_' + CLIENT, FOLDKEY = 'hub_tk_fold_' + CLIENT;
 let FOLD = (() => { try{ return JSON.parse(ls.get(FOLDKEY) || '{}'); }catch(e){ return {}; } })();
@@ -728,7 +730,7 @@ function groupHTML(g){
   </section>`;
 }
 function renderTasks(){
-  if(!CAN_TASKS){ $('#tkBody').innerHTML = '<div class="empty">დავალებები მხოლოდ შიდა გუნდისთვისაა.</div>'; return; }
+  if(!CAN_TASKS){ $('#tkBody').innerHTML = '<div class="empty">დავალებები მხოლოდ შიდა გუნდისთვისაა.</div>'; $('#tkLinks').hidden = true; return; }
   const mineOpen = ME ? TASKS.filter(t => (t.owners || []).includes(ME) && t.status !== 'done').length : 0;
   const late = TASKS.filter(t => t.due && t.due < today() && t.status !== 'done').length;
   $('#tkSub').textContent = ME ? `შენზეა ${mineOpen} ღია დავალება${late ? `, ვადაგადაცილებულია ${late}` : ''}.` : 'ვინ რას აკეთებს და რა ვადაში.';
@@ -744,6 +746,7 @@ function renderTasks(){
     <button type="button" class="btn sm gadd" data-gadd>${I.plus}ახალი ჯგუფი</button>`;
   setSeg($('#tkSeg'), 'data-who', tkWho);
   $('#tkSeg').querySelectorAll('button').forEach(b => segRO.observe(b));
+  renderLinks();
   if(keepQ){ const q = $('#tkQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   paintBadge();
 }
@@ -822,7 +825,7 @@ function openBell(btn){
   ls.set(SEENKEY, String(Date.now())); paintBadge();
   popEl.onclick = e => { const b = e.target.closest('[data-nopen]'); if(b){ closePop(); openPanel(b.dataset.nopen); } };
 }
-document.addEventListener('pointerdown', e => { if(popEl && !popEl.contains(e.target) && !e.target.closest('[data-tpick],[data-gmenu],#tkBell')) closePop(); }, true);
+document.addEventListener('pointerdown', e => { if(popEl && !popEl.contains(e.target) && !e.target.closest('[data-tpick],[data-gmenu],#tkBell,[data-qadd]')) closePop(); }, true);
 document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(popEl) closePop(); else if(panelId && !$('#mpop')) closePanel(); } });
 $('#pTasks').addEventListener('scroll', () => { if(popEl && !popEl.classList.contains('k-group')) closePop(); }, {passive:true});
 addEventListener('resize', closePop);
@@ -912,6 +915,57 @@ $('#pTasks').addEventListener('pointerdown', e => {
     editTask(t.id, {grp, pos}, grp !== grpOf(t) ? `გადავიდა: ${(GROUPS.find(g => g.id === grp) || {}).name}` : '');
   };
   addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+});
+
+/* ---------- quick links under the board: Drive, socials, site, map in one click ---------- */
+const QG = [['social', 'სოციალური'], ['drive', 'Drive'], ['work', 'სამუშაო']];
+function favicon(u){
+  try{
+    const x = new URL(u), GI = n => `https://ssl.gstatic.com/images/branding/product/1x/${n}_2020q4_32dp.png`;
+    if(x.hostname === 'docs.google.com') return GI(/^\/spreadsheets/.test(x.pathname) ? 'sheets' : /^\/presentation/.test(x.pathname) ? 'slides' : 'docs');
+    if(x.hostname === 'drive.google.com') return GI('drive');
+    const host = x.hostname === 'docs.google.com' ? (/^\/spreadsheets/.test(x.pathname) ? 'sheets.google.com' : /^\/presentation/.test(x.pathname) ? 'slides.google.com' : 'docs.google.com')
+      : x.hostname === 'maps.app.goo.gl' ? 'maps.google.com' : x.hostname === 'giagia3334.github.io' ? 'likedent.ge' : x.hostname;
+    return 'https://www.google.com/s2/favicons?sz=32&domain=' + encodeURIComponent(host);
+  }catch(e){ return ''; }
+}
+function renderLinks(){
+  const el = $('#tkLinks'); el.hidden = !CAN_TASKS; if(!CAN_TASKS) return;
+  el.classList.toggle('editing', qEdit);
+  el.innerHTML = `<div class="ql">
+    <div class="qlh"><b>სწრაფი ბმულები</b><button type="button" class="linkbtn" data-qedit>${qEdit ? 'მზადაა' : 'ბმულების შეცვლა'}</button></div>
+    ${QG.map(([g, name]) => {
+      const L = LINKS.map((l, i) => [l, i]).filter(([l]) => l.g === g);
+      if(!L.length && !qEdit) return '';
+      return `<div class="qlr"><span class="qlg">${name}</span><div class="qlc">${L.map(([l, i]) => `<a class="qchip" href="${esc(l.u)}" target="_blank" rel="noopener" title="${esc(l.u)}"><img src="${esc(favicon(l.u))}" alt="" width="16" height="16" loading="lazy">${esc(l.t)}${qEdit ? `<button type="button" class="qx" data-qdel="${i}" aria-label="${esc(l.t)}: წაშლა">×</button>` : ''}</a>`).join('')}
+        ${qEdit ? `<button type="button" class="qchip qadd" data-qadd="${g}">${I.plus}დამატება</button>` : ''}</div></div>`;
+    }).join('')}</div>`;
+}
+function saveLinks(msg){ renderLinks(); return taskCall({action:'hubLinksSave', links: LINKS}, msg); }
+$('#tkLinks').addEventListener('click', e => {
+  if(e.target.closest('[data-qedit]')){ qEdit = !qEdit; renderLinks(); return; }
+  const d = e.target.closest('[data-qdel]');
+  if(d){ e.preventDefault(); const l = LINKS[+d.dataset.qdel]; if(confirm(`წავშალო ბმული „${l.t}“?`)){ LINKS.splice(+d.dataset.qdel, 1); saveLinks('ბმული წაიშალა'); } return; }
+  if(qEdit && e.target.closest('a.qchip')){ e.preventDefault(); return; }
+  const a = e.target.closest('[data-qadd]'); if(!a) return;
+  closePop();
+  popEl = document.createElement('div'); popEl.className = 'tpop k-link'; popEl.dataset.for = 'qadd';
+  popEl.innerHTML = `<small>ახალი ბმული: ${esc((QG.find(x => x[0] === a.dataset.qadd) || [])[1] || '')}</small>
+    <input class="gin" name="t" maxlength="40" placeholder="სახელი, მაგ. TikTok" autocomplete="off">
+    <input class="gin" name="u" placeholder="https://..." inputmode="url" autocomplete="off">
+    <button type="button" class="btn sm primary" data-qsave>დამატება</button>`;
+  document.body.appendChild(popEl);
+  const r = a.getBoundingClientRect(), w = 280;
+  popEl.style.width = w + 'px'; popEl.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+  popEl.style.top = Math.max(8, r.top - popEl.offsetHeight - 8) + 'px';
+  const [t, u] = popEl.querySelectorAll('input'); t.focus();
+  const go = () => {
+    let url = u.value.trim(); if(url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+    if(!t.value.trim() || !/^https:\/\/\S+\.\S+/.test(url)){ toast('ჩაწერე სახელი და სრული ბმული (https://...).'); return; }
+    LINKS.push({g: a.dataset.qadd, t: t.value.trim(), u: url}); closePop(); saveLinks('ბმული დაემატა');
+  };
+  popEl.querySelector('[data-qsave]').onclick = go;
+  [t, u].forEach(i => i.onkeydown = ev => { if(ev.key === 'Enter') go(); });
 });
 
 /* ---------- task panel: description, comments with @mentions, history (monday's item card) ---------- */
@@ -1104,7 +1158,7 @@ async function boot(){
 boot();
 
 /* ---------- demo data (?demo=1) ---------- */
-let DEMO_LEADS = null, DEMO_TASKS = null, DEMO_GROUPS = null;
+let DEMO_LEADS = null, DEMO_TASKS = null, DEMO_GROUPS = null, DEMO_LINKS = [{g:'social',t:'Instagram',u:'https://www.instagram.com/likedent.batumi/'},{g:'social',t:'Facebook',u:'https://www.facebook.com/p/Like-DENT-100034368850700/'},{g:'social',t:'YouTube',u:'https://www.youtube.com/@Likedent.Batumi'},{g:'social',t:'საიტი',u:'https://www.likedent.ge/'},{g:'social',t:'რუკა',u:'https://maps.app.goo.gl/Vvt7y5jUqsLP5NGW7'},{g:'social',t:'WhatsApp',u:'https://wa.me/995557010155'},{g:'drive',t:'Likedent საქაღალდე',u:'https://drive.google.com/drive/folders/x'},{g:'drive',t:'პოსტების ცხრილი',u:'https://docs.google.com/spreadsheets/d/x/edit'},{g:'drive',t:'კონტენტი, ოქტომბერი',u:'https://docs.google.com/document/d/x/edit'},{g:'drive',t:'ბრენდბუქი',u:'https://drive.google.com/file/d/x/view'},{g:'work',t:'სტუდია',u:'https://giagia3334.github.io/client-previews/studio.html?c=likedent'}];
 function demoCall(body){
   if(!DEMO_LEADS){
     const now = Date.now(), H = 3600e3, D = 24 * H;
@@ -1141,7 +1195,7 @@ function demoCall(body){
     ];
     DEMO_GROUPS = [{id: 'g1', name: 'ამ კვირაში', color: '#579BFC'}, {id: 'g2', name: 'შემდეგში', color: '#A25DDC'}];
   }
-  const res = () => ({role: 'clinic', canTasks: true, groups: JSON.parse(JSON.stringify(DEMO_GROUPS)), tasks: JSON.parse(JSON.stringify(DEMO_TASKS)), people: [{email: 'gia@demo', name: 'გია'}, {email: 'tamari@demo', name: 'თამარი'}], leads: JSON.parse(JSON.stringify(DEMO_LEADS)), settings: {spend: {[m(0)]: {facebook: 240, google: 120, sms: 35}, [m(1)]: {facebook: 200, google: 100}}}});
+  const res = () => ({role: 'clinic', canTasks: true, links: DEMO_LINKS, groups: JSON.parse(JSON.stringify(DEMO_GROUPS)), tasks: JSON.parse(JSON.stringify(DEMO_TASKS)), people: [{email: 'gia@demo', name: 'გია'}, {email: 'tamari@demo', name: 'თამარი'}], leads: JSON.parse(JSON.stringify(DEMO_LEADS)), settings: {spend: {[m(0)]: {facebook: 240, google: 120, sms: 35}, [m(1)]: {facebook: 200, google: 100}}}});
   const L = id => DEMO_LEADS.find(l => l.id === id);
   if(body.action === 'hubLeadAdd') DEMO_LEADS.unshift({id: 'D' + Date.now(), created: Date.now(), ...body.lead, source: '', stage: 'new', updated: Date.now(), history: [{t: Date.now(), stage: 'new', by: body.by}]});
   if(body.action === 'hubLeadMove'){ const l = L(body.id); l.stage = body.stage; l.history.push({t: Date.now(), stage: body.stage, by: body.by}); }
@@ -1151,6 +1205,7 @@ function demoCall(body){
   if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({i: 'n' + Date.now(), t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'note', v: body.text, m: body.m});
   if(body.action === 'hubTaskNoteDel'){ const t = DEMO_TASKS.find(t => t.id === body.id); t.updates = t.updates.filter(u => u.i !== body.i); }
   if(body.action === 'hubGroupSave') DEMO_GROUPS = body.groups;
+  if(body.action === 'hubLinksSave') DEMO_LINKS = body.links;
   if(body.action === 'hubTaskDelete') DEMO_TASKS.splice(DEMO_TASKS.findIndex(t => t.id === body.id), 1);
   return new Promise(r => setTimeout(() => r(res()), 250));
 }

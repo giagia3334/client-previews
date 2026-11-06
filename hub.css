@@ -714,3 +714,30 @@ body.tdragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
   .tp-meta{grid-template-columns:1fr 1fr}
   .bell{margin-left:0}
 }
+
+/* quick links bar at the bottom of the task board */
+.qlinks{position:sticky;bottom:0;z-index:4;background:var(--glass);backdrop-filter:saturate(1.6) blur(18px);-webkit-backdrop-filter:saturate(1.6) blur(18px);border-top:1px solid var(--mist)}
+.qlinks[hidden]{display:none}
+.ql{max-width:1240px;margin:0 auto;padding:12px 40px 14px;display:flex;flex-direction:column;gap:7px}
+.qlh{display:flex;align-items:center;gap:10px}
+.qlh b{font-size:13.5px}
+.qlh .linkbtn{margin-left:auto;font-size:13px}
+.qlr{display:flex;align-items:center;gap:10px}
+.qlg{flex:0 0 78px;font-size:12px;font-weight:600;color:var(--slate)}
+.qlc{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0;flex:1}
+.qlc::-webkit-scrollbar{display:none}
+.qchip{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;background:var(--surface);border:1px solid var(--mist);border-radius:999px;padding:6px 12px 6px 8px;font:600 13px/1 var(--font);color:var(--ink);text-decoration:none;white-space:nowrap;cursor:pointer;transition:border-color .15s,transform .15s var(--ease)}
+.qchip:hover{border-color:var(--t-low);transform:translateY(-1px)}
+.qchip img{width:16px;height:16px;border-radius:3px}
+.qchip.qadd{border-style:dashed;color:var(--slate);padding-left:10px;appearance:none}
+.qchip .qx{appearance:none;border:0;background:var(--t-stuck);color:#fff;width:18px;height:18px;border-radius:50%;font:700 13px/18px var(--font);padding:0;margin-left:2px;cursor:pointer}
+.editing .qchip:not(.qadd){cursor:default;transform:none}
+.tpop.k-link{gap:8px}
+.tpop.k-link .btn{justify-content:center}
+@media (max-width:860px){
+  .qlinks{position:static;background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .ql{padding:10px 16px 24px}
+  .qlr{flex-direction:column;align-items:stretch;gap:5px}
+  .qlg{flex:none}
+  .qlc{flex-wrap:wrap}
+}
