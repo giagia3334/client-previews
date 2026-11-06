@@ -826,7 +826,7 @@ function openBell(btn){
   popEl.onclick = e => { const b = e.target.closest('[data-nopen]'); if(b){ closePop(); openPanel(b.dataset.nopen); } };
 }
 document.addEventListener('pointerdown', e => { if(popEl && !popEl.contains(e.target) && !e.target.closest('[data-tpick],[data-gmenu],#tkBell,[data-qadd]')) closePop(); }, true);
-document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(popEl) closePop(); else if(panelId && !$('#mpop')) closePanel(); } });
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(popEl) closePop(); else if(panelId && !$('#mpop')) leavePanel(); } });
 $('#pTasks').addEventListener('scroll', () => { if(popEl && !popEl.classList.contains('k-group')) closePop(); }, {passive:true});
 addEventListener('resize', closePop);
 
@@ -973,9 +973,19 @@ const panel = document.createElement('aside');
 panel.className = 'tpanel'; panel.id = 'tkPanel'; panel.hidden = true; panel.setAttribute('aria-label', 'დავალება');
 document.body.appendChild(panel);
 let panelTab = 'notes';
+/* never lose a typed comment: closing the card with unsent text asks to send it first */
+async function leavePanel(){
+  const ta = panel.querySelector('.tp-comp textarea');
+  if(ta && ta.value.trim()){
+    if(!confirm('კომენტარი ჯერ არ გაგზავნილა. გავგზავნო ახლა?\n\nOK: გაგზავნა. Cancel: დავრჩე და შევამოწმო.')) { ta.focus(); return false; }
+    await sendNote();
+  }
+  closePanel(); return true;
+}
 function closePanel(){ panel.hidden = true; panel.innerHTML = ''; panelId = null; document.querySelectorAll('.trow.open').forEach(r => r.classList.remove('open')); }
-function openPanel(id){
+async function openPanel(id){
   const t = TASKS.find(x => x.id === id); if(!t || id.startsWith('tmp')) return;
+  if(panelId && panelId !== id && !(await leavePanel())) return;
   closePop(); panelId = id; panelTab = 'notes';
   panel.innerHTML = `<div class="tp-scrim" data-pclose></div><div class="tp-card" role="dialog" aria-modal="true">
     <header class="tp-h"><button type="button" class="icon-btn" data-pclose aria-label="დახურვა">${TI.x}</button>
@@ -1040,7 +1050,7 @@ async function sendNote(){
   }
 }
 panel.addEventListener('click', async e => {
-  if(e.target.closest('[data-pclose]')){ closePanel(); return; }
+  if(e.target.closest('[data-pclose]')){ leavePanel(); return; }
   const tb = e.target.closest('[data-ptab]'); if(tb){ panelTab = tb.dataset.ptab; paintPanel(); return; }
   const t = TASKS.find(x => x.id === panelId); if(!t) return;
   const pk = e.target.closest('[data-ppick]');
