@@ -670,7 +670,7 @@ function notifs(){
   if(!ME) return [];
   const out = [];
   TASKS.forEach(t => (t.updates || []).forEach(u => {
-    if(u.be === ME) return;
+    if(u.be === ME || (!u.be && u.by === pname(ME))) return;   // my own changes (older entries have no email)
     if(u.k === 'note' && (u.m || []).includes(ME)) out.push({t: u.t, task: t, by: u.by, what: 'მოგნიშნა', text: u.v});
     if(u.k === 'owners' && (u.add || []).includes(ME)) out.push({t: u.t, task: t, by: u.by, what: 'დაგავალა'});
   }));
