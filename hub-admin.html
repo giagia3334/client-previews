@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>კლიენტის აპის მართვა</title>
-<link rel="stylesheet" href="hub.css?v=16">
+<link rel="stylesheet" href="hub.css?v=18">
 <style>
 html,body{margin:0;min-height:100%}
 body{background:var(--h-bg);color:var(--h-fg);font-family:var(--font);-webkit-font-smoothing:antialiased}
@@ -94,7 +94,7 @@ body.dark .msg.err{color:#F2B8B5}
 <script>
 (() => {
 const KEYNAME = 'igs_key_' + CLIENT;
-const TABS = [['content','კონტენტი','ინსტაგრამის პოსტები, დადასტურება და კომენტარები'],['patients','პაციენტები','მოთხოვნები სამ ეტაპად'],['analytics','ანალიტიკა','ლიდები, ჩაწერა და ფასი არხების მიხედვით']];
+const TABS = [['content','კონტენტი','ინსტაგრამის პოსტები, დადასტურება და კომენტარები'],['patients','პაციენტები','მოთხოვნები სამ ეტაპად'],['analytics','ანალიტიკა','ლიდები, ჩაწერა და ფასი არხების მიხედვით'],['tasks','დავალებები','ვინ რას აკეთებს: სტატუსი, ვადა, კომენტარები']];
 const CH = [['facebook','Facebook'],['instagram','Instagram'],['google','Google'],['tiktok','TikTok'],['sms','SMS'],['other','სხვა']];
 const MON = ['იანვარი','თებერვალი','მარტი','აპრილი','მაისი','ივნისი','ივლისი','აგვისტო','სექტემბერი','ოქტომბერი','ნოემბერი','დეკემბერი'];
 const SESKEY = 'hub_ses_' + CLIENT;
@@ -102,14 +102,14 @@ let CFG = null, S = null, spendEdit = {}, USERS = [];
 const auth = () => ls.get(SESKEY) ? {session: ls.get(SESKEY)} : {key: ls.get(KEYNAME)};
 const escA = v => String(v).replace(/[&"<>]/g, c => ({'&':'&amp;','"':'&quot;','<':'&lt;','>':'&gt;'}[c]));
 function renderUsers(){
-  $('#users').innerHTML = USERS.map((u, i) => `<div class="u"><input class="btn" style="font-weight:500" type="email" data-ue="${i}" value="${escA(u.email)}" placeholder="name@gmail.com" autocomplete="off">
+  $('#users').innerHTML = USERS.map((u, i) => `<div class="u"><input class="btn" style="font-weight:500;max-width:120px" data-un="${i}" value="${escA(u.name || '')}" placeholder="სახელი" maxlength="40" autocomplete="off"><input class="btn" style="font-weight:500" type="email" data-ue="${i}" value="${escA(u.email)}" placeholder="name@gmail.com" autocomplete="off">
     <select class="btn" data-ur="${i}"><option value="clinic" ${u.role !== 'team' ? 'selected' : ''}>კლინიკა</option><option value="team" ${u.role === 'team' ? 'selected' : ''}>გუნდი</option></select>
     <button class="btn x" type="button" data-ux="${i}" aria-label="წაშლა">✕</button></div>`).join('');
 }
-$('#users').addEventListener('input', e => { const t = e.target; if(t.dataset.ue) USERS[t.dataset.ue].email = t.value.trim(); if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
+$('#users').addEventListener('input', e => { const t = e.target; if(t.dataset.ue) USERS[t.dataset.ue].email = t.value.trim(); if(t.dataset.un) USERS[t.dataset.un].name = t.value.trim(); if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
 $('#users').addEventListener('change', e => { const t = e.target; if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
 $('#users').addEventListener('click', e => { const x = e.target.closest('[data-ux]'); if(x){ USERS.splice(+x.dataset.ux, 1); renderUsers(); } });
-$('#userAdd').onclick = () => { USERS.push({email:'', role:'clinic'}); renderUsers(); $('#users').lastElementChild.querySelector('input').focus(); };
+$('#userAdd').onclick = () => { USERS.push({email:'', role:'clinic', name:''}); renderUsers(); $('#users').lastElementChild.querySelector('input').focus(); };
 const setTheme = t => { document.body.classList.toggle('dark', t === 'dark'); ls.set('igs_theme', t); };
 setTheme(ls.get('igs_theme') || 'light');
 $('#theme').onclick = () => setTheme(document.body.classList.contains('dark') ? 'light' : 'dark');

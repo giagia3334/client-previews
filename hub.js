@@ -30,6 +30,8 @@ const I = {
   content: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M3.5 9.5h17M9.5 9.5v11"/>'),
   patients: SV('<circle cx="9" cy="8.5" r="3.5"/><path d="M2.8 19.5a6.3 6.3 0 0 1 12.4 0"/><path d="M16 5.2a3.4 3.4 0 0 1 0 6.6M18 14.2a6 6 0 0 1 3.2 5.3"/>'),
   analytics: SV('<path d="M4 20h16"/><path d="M7 16.5v-5M12 16.5V7M17 16.5v-8"/>'),
+  tasks: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12.3 2.6 2.6L16.2 9"/>'),
+  note: SV('<path d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>', 16),
   moon: SV('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', 18),
   sun: SV('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>', 18),
   plus: SV('<path d="M12 5v14M5 12h14"/>', 18),
@@ -47,7 +49,7 @@ const I = {
 
 let CH = {facebook:{}, youtube:{}};
 const chUrl = f => f ? BASE + 'channels/' + f : '';
-let CFGH = null, TABS = {content:true, patients:false, analytics:false}, cur = 'content', plat = ls.get(PLATKEY) || 'ig';
+let CFGH = null, TABS = {content:true, patients:false, analytics:false, tasks:false}, cur = 'content', plat = ls.get(PLATKEY) || 'ig';
 let LEADS = [], SPEND = {}, ROLE = '', loaded = false, busy = 0, pickStage = 'new', showLost = false, period = 'month';
 const pin = () => ls.get(PINKEY) || '';
 const session = () => ls.get(SESKEY) || '';
@@ -66,8 +68,8 @@ const isDark = () => document.body.classList.contains('dark');
 /* ---------- shell ---------- */
 const app = $('#app'), stage = document.querySelector('.stage');
 function navItems(cls){
-  return [['content','კონტენტი'],['patients','პაციენტები'],['analytics','ანალიტიკა']]
-    .map(([k, t]) => `<button type="button" class="${cls}" data-tab="${k}">${I[k]}<span>${t}</span>${k === 'patients' ? '<span class="n" hidden></span>' : ''}</button>`).join('');
+  return [['content','კონტენტი'],['patients','პაციენტები'],['tasks','დავალებები'],['analytics','ანალიტიკა']]
+    .map(([k, t]) => `<button type="button" class="${cls}" data-tab="${k}">${I[k]}<span>${t}</span>${k === 'patients' || k === 'tasks' ? '<span class="n" hidden></span>' : ''}</button>`).join('');
 }
 const shell = document.createElement('div');
 shell.className = 'shell';
@@ -97,6 +99,10 @@ shell.innerHTML = `
       <div class="head"><div class="ttl"><h1>პაციენტები</h1><p id="ptSub">მოთხოვნები საიტიდან, რეკლამიდან და ზარებიდან.</p></div><button type="button" class="btn primary" id="ptAdd" hidden>${I.plus}ახალი პაციენტი</button></div>
       <div class="body" id="ptBody"></div>
     </section>
+    <section class="pane" id="pTasks" hidden>
+      <div class="head"><div class="ttl"><h1>დავალებები</h1><p id="tkSub">ვინ რას აკეთებს და რა ვადაში.</p></div><button type="button" class="btn primary" id="tkAdd" hidden>${I.plus}ახალი დავალება</button></div>
+      <div class="body" id="tkBody"></div>
+    </section>
     <section class="pane" id="pAnalytics" hidden>
       <div class="head"><div class="ttl"><h1>ანალიტიკა</h1><p>რამდენი პაციენტი მოვიდა, საიდან და რა დაჯდა თითო.</p></div>
         <div class="seg" role="group" aria-label="პერიოდი" id="perSeg"><span class="thumb"></span>${[['month','ეს თვე'],['prev','წინა თვე'],['q','3 თვე'],['all','სულ']].map(([k, t]) => `<button type="button" data-per="${k}" aria-pressed="false">${t}</button>`).join('')}</div></div>
@@ -113,7 +119,7 @@ document.body.insertAdjacentHTML('beforeend', `
 document.body.classList.add('hubbed');
 shell.querySelector('.plat[data-plat="ig"]').appendChild(stage);
 
-const panes = {content: $('#pContent'), patients: $('#pPatients'), analytics: $('#pAnalytics')};
+const panes = {content: $('#pContent'), patients: $('#pPatients'), tasks: $('#pTasks'), analytics: $('#pAnalytics')};
 function paintTheme(){ document.querySelectorAll('[data-theme]').forEach(b => b.innerHTML = isDark() ? I.sun : I.moon); }
 document.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => { $('#themeBtn').click(); paintTheme(); });
 $('#themeBtn').addEventListener('click', () => setTimeout(paintTheme));
@@ -135,7 +141,7 @@ document.querySelectorAll('.seg button').forEach(b => segRO.observe(b));
 if(document.fonts) document.fonts.ready.then(() => document.querySelectorAll('.seg').forEach(moveThumb));
 
 function showTab(t){
-  if(!TABS[t]) t = TABS.content ? 'content' : TABS.patients ? 'patients' : 'analytics';
+  if(!TABS[t]) t = ['content','patients','tasks','analytics'].find(k => TABS[k]) || 'content';
   cur = t;
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === t ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   Object.entries(panes).forEach(([k, el]) => el.hidden = k !== t);
@@ -424,7 +430,7 @@ async function loadHub(silent, idToken){
   try{
     const r = await call(idToken ? {action:'hubLoad', idToken} : {action:'hubLoad', pin: pin()});
     if(r.session) ls.set(SESKEY, r.session);
-    ME = r.me || ''; take(r); loaded = true; render();
+    ME = r.me || ''; if(DEMO) ME = 'tamari@demo'; take(r); loaded = true; render();
   }catch(e){
     const msg = authError(e, silent);
     if(msg !== null){ loaded = false; render(msg); }
@@ -457,11 +463,15 @@ function take(r){
   SPEND = (r.settings || {}).spend || {}; ROLE = r.role || '';
   const n = LEADS.filter(l => l.stage === 'new').length;
   document.querySelectorAll('[data-tab="patients"] .n').forEach(d => { d.textContent = n; d.hidden = !n; });
+  TASKS = r.tasks || []; PEOPLE = r.people || [];
+  const mine = ME ? TASKS.filter(t => t.owner === ME && t.status !== 'done').length : 0;
+  document.querySelectorAll('[data-tab="tasks"] .n').forEach(d => { d.textContent = mine; d.hidden = !mine; });
 }
 function render(err){
-  $('#ptAdd').hidden = !loaded;
-  if(!loaded){ $('#ptBody').innerHTML = lockHTML(err); $('#anBody').innerHTML = lockHTML(err); drawGoogle(); return; }
+  $('#ptAdd').hidden = !loaded; $('#tkAdd').hidden = !loaded;
+  if(!loaded){ $('#ptBody').innerHTML = lockHTML(err); $('#anBody').innerHTML = lockHTML(err); $('#tkBody').innerHTML = lockHTML(err); drawGoogle(); return; }
   if(cur === 'patients') renderPatients();
+  if(cur === 'tasks') renderTasks();
   if(cur === 'analytics') renderAnalytics();
 }
 const lockHTML = err => (GCLIENT && !usePin) ? `<div class="lock">
@@ -588,6 +598,165 @@ function openLead(id){
   sh.hidden = false;
 }
 
+/* ---------- tasks: a small monday-style board ---------- */
+let TASKS = [], PEOPLE = [], tkWho = 'all', showDone = false, popEl = null;
+const TST = [
+  {id:'todo',  label:'დასაწყები'},
+  {id:'doing', label:'მიმდინარე'},
+  {id:'stuck', label:'გაჭედილი'},
+  {id:'done',  label:'დასრულდა'},
+];
+const TPR = [{id:'high', label:'მაღალი'}, {id:'mid', label:'საშუალო'}, {id:'low', label:'დაბალი'}, {id:'', label:'—'}];
+const AVC = ['#A07800','#0E6B53','#5B4FC4','#C2410C','#0F6E9E','#A23B72'];
+const person = e => PEOPLE.find(p => p.email === e);
+const pname = e => (person(e) || {}).name || (e ? e.split('@')[0] : '');
+const avColor = e => AVC[[...String(e)].reduce((a, c) => a + c.charCodeAt(0), 0) % AVC.length];
+const avHTML = (e, cls = '') => e ? `<span class="av ${cls}" style="--c:${avColor(e)}" title="${esc(pname(e))}">${esc([...pname(e)][0] || '?')}</span>` : `<span class="av empty ${cls}" title="არავის აქვს">${SV('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/>', 15)}</span>`;
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+function dueHTML(t){
+  if(!t.due) return '<span class="dd none">ვადა</span>';
+  const [y, m, d] = t.due.split('-').map(Number), late = t.status !== 'done' && t.due < today(), now = t.due === today();
+  return `<span class="dd ${late ? 'late' : now ? 'now' : ''}">${now ? 'დღეს' : `${d} ${MONTHS[m - 1]}`}${y !== new Date().getFullYear() ? ' ' + y : ''}</span>`;
+}
+const stLabel = id => (TST.find(s => s.id === id) || TST[0]).label;
+const prLabel = id => (TPR.find(s => s.id === id) || TPR[3]).label;
+function taskRow(t){
+  const n = (t.updates || []).filter(u => u.k === 'note').length;
+  return `<div class="trow" data-task="${esc(t.id)}" role="row">
+    <button type="button" class="tname" data-topen title="გახსნა"><span>${esc(t.title)}</span>${n ? `<i class="tn">${I.note}${n}</i>` : `<i class="tn ghost">${I.note}</i>`}</button>
+    <button type="button" class="tc tc-own" data-tpick="owner" aria-label="პასუხისმგებელი: ${esc(pname(t.owner) || 'არავინ')}">${avHTML(t.owner)}<span class="on">${esc(pname(t.owner) || '')}</span></button>
+    <button type="button" class="tc tc-st st-${esc(t.status)}" data-tpick="status">${stLabel(t.status)}</button>
+    <button type="button" class="tc tc-pr pr-${esc(t.priority || 'none')}" data-tpick="priority">${prLabel(t.priority)}</button>
+    <label class="tc tc-due">${dueHTML(t)}<input type="date" value="${esc(t.due)}" data-tdue aria-label="ვადა"></label>
+  </div>`;
+}
+function renderTasks(){
+  const L = TASKS.filter(t => tkWho === 'all' || t.owner === tkWho);
+  const open = L.filter(t => t.status !== 'done').sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : (a.due || '9') > (b.due || '9') ? 1 : b.created - a.created);
+  const done = L.filter(t => t.status === 'done').sort((a, b) => b.updated - a.updated);
+  const late = open.filter(t => t.due && t.due < today()).length, mine = ME ? TASKS.filter(t => t.owner === ME && t.status !== 'done').length : 0;
+  $('#tkSub').textContent = ME && mine ? `შენზეა ${mine} ღია დავალება${late ? `, ${late} ვადაგადაცილებული` : ''}.` : late ? `${late} დავალებას ვადა გადაუცილდა.` : 'ვინ რას აკეთებს და რა ვადაში.';
+  const who = [['all', 'ყველა'], ...PEOPLE.filter(p => p.email === ME).map(p => [p.email, 'ჩემი']), ...PEOPLE.filter(p => p.email !== ME).map(p => [p.email, p.name])];
+  const head = `<div class="thead" role="row"><span>დავალება</span><span>ვისზეა</span><span>სტატუსი</span><span>პრიორიტეტი</span><span>ვადა</span></div>`;
+  const counts = TST.map(s => [s, open.concat(done).filter(t => t.status === s.id).length]).filter(([, n]) => n);
+  const bar = L.length ? `<div class="tbar" aria-hidden="true">${counts.map(([s, n]) => `<i class="st-${s.id}" style="flex:${n}" title="${s.label}: ${n}"></i>`).join('')}</div>` : '';
+  $('#tkBody').innerHTML = `
+    <div class="tfil"><div class="seg" role="group" aria-label="ვისი დავალებები" id="tkSeg"><span class="thumb"></span>${who.map(([k, t]) => `<button type="button" data-who="${esc(k)}" aria-pressed="false">${esc(t)}</button>`).join('')}</div></div>
+    <section class="tgrp g-open">
+      <div class="tgh"><b>ღია დავალებები</b><i>${open.length}</i>${bar}</div>
+      <div class="ttbl" role="table">${head}${open.map(taskRow).join('')}
+        <form class="tadd" data-tadd><span class="plus">${I.plus}</span><input name="title" maxlength="160" placeholder="+ დავალების დამატება" autocomplete="off" aria-label="ახალი დავალება"><button class="btn sm primary" type="submit">დამატება</button></form>
+      </div>
+      ${!open.length ? `<div class="empty">${tkWho === 'all' ? 'ღია დავალება არ არის. ჩაწერეთ ახალი ზემოთ.' : `${esc(pname(tkWho))}-ზე ღია დავალება არ არის.`}</div>` : ''}
+    </section>
+    <section class="tgrp g-done">
+      <button type="button" class="tgh" data-tdone aria-expanded="${showDone}"><span class="chev">${SV('<path d="m9 6 6 6-6 6"/>', 16)}</span><b>დასრულებული</b><i>${done.length}</i></button>
+      ${showDone && done.length ? `<div class="ttbl" role="table">${head}${done.map(taskRow).join('')}</div>` : ''}
+    </section>`;
+  setSeg($('#tkSeg'), 'data-who', tkWho);
+  $('#tkSeg').querySelectorAll('button').forEach(b => segRO.observe(b));
+}
+async function taskCall(body, okMsg){
+  busy++;
+  try{ take(await call(Object.assign({pin: pin()}, body))); if(okMsg) toast(okMsg); return true; }
+  catch(e){ toast(/delete/.test(e.message) ? 'წაშლა შეუძლია მხოლოდ შემქმნელს ან გუნდს.' : 'ვერ შეინახა. სცადეთ თავიდან.'); return false; }
+  finally{ busy--; render(); }
+}
+function editTask(id, patch, msg){
+  const t = TASKS.find(x => x.id === id); if(!t) return;
+  Object.assign(t, patch); if(patch.status) t.updated = Date.now(); render();
+  return taskCall({action:'hubTaskEdit', id, task: patch}, msg);
+}
+/* the coloured option list that opens from a cell, like on monday */
+function closePop(){ if(popEl){ popEl.remove(); popEl = null; } }
+function openPop(cell, kind, t){
+  closePop();
+  const list = kind === 'status' ? TST.map(s => [s.id, s.label, 'st-' + s.id])
+    : kind === 'priority' ? TPR.map(s => [s.id, s.label, 'pr-' + (s.id || 'none')])
+    : [...PEOPLE.map(p => [p.email, p.name, 'own']), ['', 'არავის', 'own']];
+  popEl = document.createElement('div');
+  popEl.className = 'tpop k-' + kind; popEl.setAttribute('role', 'listbox');
+  popEl.innerHTML = list.map(([v, l, c]) => `<button type="button" class="${c}" data-v="${esc(v)}" aria-selected="${(t[kind] || '') === v}">${kind === 'owner' ? avHTML(v) : ''}<span>${esc(l)}</span></button>`).join('');
+  document.body.appendChild(popEl);
+  const r = cell.getBoundingClientRect(), w = Math.max(r.width, 180), h = popEl.offsetHeight;
+  popEl.style.width = w + 'px';
+  popEl.style.left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8) + 'px';
+  popEl.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+  popEl.onclick = e => {
+    const b = e.target.closest('[data-v]'); if(!b) return;
+    const v = b.dataset.v; closePop();
+    if((t[kind] || '') === v) return;
+    editTask(t.id, {[kind]: v}, kind === 'status' && v === 'done' ? `„${t.title}“ დასრულდა` : kind === 'owner' && v ? `დავალება გადაეცა: ${pname(v)}` : '');
+  };
+  popEl.querySelector('[aria-selected="true"]')?.focus({preventScroll:true});
+}
+document.addEventListener('pointerdown', e => { if(popEl && !popEl.contains(e.target) && !e.target.closest('[data-tpick]')) closePop(); }, true);
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closePop(); });
+$('#pTasks').addEventListener('scroll', closePop, {passive:true});
+addEventListener('resize', closePop);
+$('#pTasks').addEventListener('click', e => {
+  if(e.target.closest('#tkAdd')){ openTask(null); return; }
+  const w = e.target.closest('[data-who]'); if(w){ tkWho = w.dataset.who; renderTasks(); return; }
+  if(e.target.closest('[data-tdone]')){ showDone = !showDone; renderTasks(); return; }
+  const row = e.target.closest('[data-task]'); if(!row) return;
+  const t = TASKS.find(x => x.id === row.dataset.task); if(!t) return;
+  const pk = e.target.closest('[data-tpick]');
+  if(pk){ if(popEl && popEl.dataset.for === t.id + pk.dataset.tpick){ closePop(); return; } openPop(pk, pk.dataset.tpick, t); popEl.dataset.for = t.id + pk.dataset.tpick; return; }
+  if(e.target.closest('.tc-due')){ const i = row.querySelector('[data-tdue]'); try{ i.showPicker(); }catch(err){ i.focus(); } e.preventDefault(); return; }
+  if(e.target.closest('[data-topen]')) openTask(t.id);
+});
+$('#pTasks').addEventListener('change', e => {
+  const i = e.target.closest('[data-tdue]'); if(!i) return;
+  editTask(i.closest('[data-task]').dataset.task, {due: i.value}, '');
+});
+$('#pTasks').addEventListener('submit', async e => {
+  const f = e.target.closest('[data-tadd]'); if(!f) return;
+  e.preventDefault();
+  const title = f.title.value.trim(); if(!title) return;
+  const owner = tkWho !== 'all' ? tkWho : '';
+  TASKS.unshift({id: 'tmp' + Date.now(), created: Date.now(), title, notes: '', owner, status: 'todo', priority: '', due: '', updates: [], by: ''});
+  renderTasks(); $('#tkBody [data-tadd] input').focus();
+  await taskCall({action:'hubTaskAdd', task: {title, owner}}, 'დავალება დაემატა');
+  $('#tkBody [data-tadd] input')?.focus();
+});
+const UPK = {add: () => 'დავალება შექმნა', status: u => `სტატუსი: ${stLabel(u.v)}`, owner: u => u.v ? `გადასცა: ${pname(u.v)}` : 'პასუხისმგებელი მოხსნა'};
+function openTask(id){
+  const t = id ? TASKS.find(x => x.id === id) : {title: '', notes: '', owner: tkWho !== 'all' ? tkWho : '', status: 'todo', priority: '', due: '', updates: []};
+  if(!t) return;
+  const can = !id || ROLE === 'team' || (ME && t.creator === ME);
+  const ups = (t.updates || []).slice().reverse();
+  shf.innerHTML = `<h3><span>${id ? 'დავალება' : 'ახალი დავალება'}</span><button class="hx" type="button" data-close aria-label="დახურვა">×</button></h3>
+    <label>რა უნდა გაკეთდეს<input name="title" maxlength="160" value="${esc(t.title)}" required autocomplete="off"></label>
+    <div class="two"><label>ვისზეა<select name="owner">${opts([['', 'არავის'], ...PEOPLE.map(p => [p.email, p.name])], t.owner)}</select></label>
+    <label>ვადა<input type="date" name="due" value="${esc(t.due)}"></label></div>
+    <div class="two"><label>სტატუსი<select name="status">${opts(TST.map(s => [s.id, s.label]), t.status)}</select></label>
+    <label>პრიორიტეტი<select name="priority">${opts(TPR.map(s => [s.id, s.id ? s.label : 'არ არის']), t.priority || '')}</select></label></div>
+    <label>დეტალები<textarea name="notes" maxlength="2000" placeholder="ბმული, ფაილი, რას უნდა მიაქციოს ყურადღება">${esc(t.notes)}</textarea></label>
+    ${id ? `<div class="tups"><b>კომენტარები და ისტორია</b>
+      <div class="tnote"><textarea data-tnote maxlength="1500" placeholder="დაწერე კომენტარი ან განახლება"></textarea><button class="btn sm" type="button" data-tsend>გაგზავნა</button></div>
+      <ul>${ups.map(u => u.k === 'note' ? `<li class="n"><div class="uh">${avHTML((PEOPLE.find(p => p.name === u.by) || {}).email || '', 'sm')}<b>${esc(u.by)}</b><time>${fmt(u.t)}</time></div><p>${esc(u.v)}</p></li>`
+        : `<li class="s">${esc(u.by)}: ${esc((UPK[u.k] || (() => ''))(u))}, ${fmt(u.t)}</li>`).join('')}</ul></div>` : ''}
+    <div class="row">${id && can ? '<button class="btn" type="button" data-tdel>წაშლა</button><span style="flex:1"></span>' : ''}<button class="btn" type="button" data-close>დახურვა</button><button class="btn primary" type="submit">${id ? 'შენახვა' : 'დავალების დამატება'}</button></div>`;
+  const send = shf.querySelector('[data-tsend]');
+  if(send) send.onclick = async () => {
+    const ta = shf.querySelector('[data-tnote]'), text = ta.value.trim(); if(!text) return;
+    send.disabled = true;
+    if(await taskCall({action:'hubTaskNote', id, text}, 'კომენტარი დაემატა')) openTask(id); else send.disabled = false;
+  };
+  const del = shf.querySelector('[data-tdel]');
+  if(del) del.onclick = async () => { if(!confirm('წავშალო ეს დავალება?')) return; if(await taskCall({action:'hubTaskDelete', id}, 'დავალება წაიშალა')) closeSh(); };
+  shf.onsubmit = async e => {
+    e.preventDefault();
+    const v = Object.fromEntries(new FormData(shf)); v.title = v.title.trim();
+    if(!v.title){ toast('ჩაწერეთ, რა უნდა გაკეთდეს.'); return; }
+    const patch = {}; ['title','owner','due','status','priority','notes'].forEach(k => { if((v[k] || '') !== (t[k] || '')) patch[k] = v[k]; });
+    shf.querySelector('[type=submit]').disabled = true;
+    const ok = id ? (Object.keys(patch).length ? await taskCall({action:'hubTaskEdit', id, task: patch}, 'შენახულია') : true) : await taskCall({action:'hubTaskAdd', task: v}, 'დავალება დაემატა');
+    if(ok) closeSh(); else shf.querySelector('[type=submit]').disabled = false;
+  };
+  sh.hidden = false; if(!id) setTimeout(() => shf.querySelector('input').focus({preventScroll:true}), 60);
+}
+
 /* ---------- analytics ---------- */
 function range(){
   const now = new Date(), y = now.getFullYear(), m = now.getMonth();
@@ -644,18 +813,18 @@ async function boot(){
   // the Instagram data arrives a moment later; draw the other platforms (and open a linked post) as soon as it is there
   const wait = setInterval(() => { if(ready()){ clearInterval(wait); renderPlat(); openFromLink(); } }, 40);
   setTimeout(undeep, 8000);   // never leave the page covered if something fails
-  if(DEMO) TABS = {content:true, patients:true, analytics:true};
+  if(DEMO) TABS = {content:true, patients:true, analytics:true, tasks:true};
   else if(CFGH.api){
-    try{ const r = await api.post(CFGH, {action:'hubPublic'}); TABS = Object.assign({content:true, patients:false, analytics:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; }
-    catch(e){ TABS = {content:true, patients:false, analytics:false}; }
+    try{ const r = await api.post(CFGH, {action:'hubPublic'}); TABS = Object.assign({content:true, patients:false, analytics:false, tasks:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; }
+    catch(e){ TABS = {content:true, patients:false, analytics:false, tasks:false}; }
   }
   setupNav();
-  setInterval(() => { if(document.visibilityState === 'visible' && cur !== 'content' && loaded && !busy && sh.hidden) loadHub(true); }, 30000);
+  setInterval(() => { if(document.visibilityState === 'visible' && cur !== 'content' && loaded && !busy && sh.hidden && !popEl) loadHub(true); }, 30000);
 }
 boot();
 
 /* ---------- demo data (?demo=1) ---------- */
-let DEMO_LEADS = null;
+let DEMO_LEADS = null, DEMO_TASKS = null;
 function demoCall(body){
   if(!DEMO_LEADS){
     const now = Date.now(), H = 3600e3, D = 24 * H;
@@ -680,11 +849,26 @@ function demoCall(body){
     ];
   }
   const d = new Date(), m = k => { const x = new Date(d.getFullYear(), d.getMonth() - k, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}`; };
-  const res = () => ({role: 'clinic', leads: JSON.parse(JSON.stringify(DEMO_LEADS)), settings: {spend: {[m(0)]: {facebook: 240, google: 120, sms: 35}, [m(1)]: {facebook: 200, google: 100}}}});
+  if(!DEMO_TASKS){
+    const now = Date.now(), D = 864e5, day = k => { const x = new Date(now + k * D); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+    const mk = (i, title, owner, status, priority, due, notes = '', ups = []) => ({id: 'T' + i, created: now - i * D, title, notes, owner, status, priority, due, by: 'გია', creator: 'gia@demo', updated: now - i * 3600e3, updates: [{t: now - i * D, by: 'გია', k: 'add'}, ...ups]});
+    DEMO_TASKS = [
+      mk(1, 'ნოემბრის ფოტოები: ექიმების პორტრეტები', 'tamari@demo', 'doing', 'high', day(1), 'თეთრ ფონზე, 4:5.', [{t: now - 2 * 3600e3, by: 'თამარი', k: 'note', v: 'ხვალ 12-ზე გადავიღებ.'}]),
+      mk(2, 'პაციენტის ვიდეო-შეფასება იმპლანტზე', 'tamari@demo', 'todo', 'mid', day(4)),
+      mk(3, 'ფასების ცხრილი საიტისთვის', 'mzia@demo', 'stuck', 'high', day(-1), 'ახალი ფასები ჯერ არ გვაქვს.'),
+      mk(4, 'Facebook-ის რეკლამის ტექსტების დადასტურება', 'gia@demo', 'todo', 'low', day(6)),
+      mk(5, 'Instagram-ის ბიო განახლება', 'gia@demo', 'done', 'low', day(-3)),
+    ];
+  }
+  const res = () => ({role: 'clinic', tasks: JSON.parse(JSON.stringify(DEMO_TASKS)), people: [{email: 'gia@demo', name: 'გია', role: 'team'}, {email: 'mzia@demo', name: 'მზია', role: 'clinic'}, {email: 'tamari@demo', name: 'თამარი', role: 'clinic'}], leads: JSON.parse(JSON.stringify(DEMO_LEADS)), settings: {spend: {[m(0)]: {facebook: 240, google: 120, sms: 35}, [m(1)]: {facebook: 200, google: 100}}}});
   const L = id => DEMO_LEADS.find(l => l.id === id);
   if(body.action === 'hubLeadAdd') DEMO_LEADS.unshift({id: 'D' + Date.now(), created: Date.now(), ...body.lead, source: '', stage: 'new', updated: Date.now(), history: [{t: Date.now(), stage: 'new', by: body.by}]});
   if(body.action === 'hubLeadMove'){ const l = L(body.id); l.stage = body.stage; l.history.push({t: Date.now(), stage: body.stage, by: body.by}); }
   if(body.action === 'hubLeadEdit') Object.assign(L(body.id), body.lead);
+  if(body.action === 'hubTaskAdd') DEMO_TASKS.unshift({id: 'T' + Date.now(), created: Date.now(), notes: '', owner: '', status: 'todo', priority: '', due: '', ...body.task, by: 'თამარი', creator: 'tamari@demo', updated: Date.now(), updates: [{t: Date.now(), by: 'თამარი', k: 'add'}]});
+  if(body.action === 'hubTaskEdit') Object.assign(DEMO_TASKS.find(t => t.id === body.id), body.task, {updated: Date.now()});
+  if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({t: Date.now(), by: 'თამარი', k: 'note', v: body.text});
+  if(body.action === 'hubTaskDelete') DEMO_TASKS.splice(DEMO_TASKS.findIndex(t => t.id === body.id), 1);
   return new Promise(r => setTimeout(() => r(res()), 250));
 }
 })();
