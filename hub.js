@@ -701,7 +701,7 @@ function visible(t){
 }
 function rowHTML(t){
   const n = notesOf(t).length, last = notesOf(t).slice(-1)[0];
-  const sub = t.notes ? `<span class="tdesc">${esc(t.notes.split('\n')[0].slice(0, 160))}</span>` : last ? `<span class="tdesc tlast"><b>${esc(last.by)}:</b> ${esc(last.v.slice(0, 140))}</span>` : '';
+  const sub = '';   // the description and comments live inside the task card only
   return `<div class="trow${panelId === t.id ? ' open' : ''}" data-task="${esc(t.id)}">
     <span class="grip" data-grip title="გადაათრიე ზემოთ ან ქვემოთ" aria-hidden="true">${TI.grip}</span>
     <div class="tname" data-topen tabindex="0" role="button" aria-label="${esc(t.title)}: გახსნა">
@@ -973,13 +973,13 @@ let panelTab = 'notes';
 /* never lose a typed comment: closing the card with unsent text asks to send it first */
 async function leavePanel(){
   const ta = panel.querySelector('.tp-comp textarea');
-  if(ta && ta.value.trim()){
+  if(ta && (ta.value.trim() || PEND.length)){
     if(!confirm('კომენტარი ჯერ არ გაგზავნილა. გავგზავნო ახლა?\n\nOK: გაგზავნა. Cancel: დავრჩე და შევამოწმო.')) { ta.focus(); return false; }
     await sendNote();
   }
   closePanel(); return true;
 }
-function closePanel(){ panel.hidden = true; panel.innerHTML = ''; panelId = null; document.querySelectorAll('.trow.open').forEach(r => r.classList.remove('open')); }
+function closePanel(){ PEND = []; panel.hidden = true; panel.innerHTML = ''; panelId = null; document.querySelectorAll('.trow.open').forEach(r => r.classList.remove('open')); }
 async function openPanel(id){
   const t = TASKS.find(x => x.id === id); if(!t || id.startsWith('tmp')) return;
   if(panelId && panelId !== id && !(await leavePanel())) return;
@@ -1025,26 +1025,71 @@ function paintPanel(){
     return;
   }
   const keep = body.querySelector('.tp-comp textarea'), draft = keep ? keep.value : '', focused = keep && document.activeElement === keep;
-  body.innerHTML = `<div class="tp-comp"><textarea maxlength="3000" placeholder="დაწერე კომენტარი. ადამიანის მოსანიშნად აკრიფე @" aria-label="კომენტარი"></textarea>
-      <div class="tp-cr"><small>@ აკრიფე და აირჩიე, ვინ მონიშნო</small><button type="button" class="btn sm primary" data-psend>გაგზავნა</button></div></div>
+  body.innerHTML = `<div class="tp-comp"><textarea maxlength="3000" placeholder="დაწერე კომენტარი. ადამიანის მოსანიშნად აკრიფე @, ფოტოს ჩასვამ ღილაკით ან Cmd+V-ით" aria-label="კომენტარი"></textarea>
+      <div class="tp-att"></div>
+      <div class="tp-cr"><button type="button" class="btn sm" data-pattach>${PH_ICON}ფოტო</button><input type="file" accept="image/*" multiple hidden data-pfile><small>@ მონიშნავს ადამიანს</small><button type="button" class="btn sm primary" data-psend>გაგზავნა</button></div></div>
     ${N.length ? `<ul class="tp-notes">${N.slice().reverse().map(u => `<li>
       <div class="uh">${avHTML(u.be || (PEOPLE.find(p => p.name === u.by) || {}).email || '', 'sm')}<b>${esc(u.by)}</b><time title="${fmt(u.t)}">${ago(u.t)}</time>
       ${u.i && (u.be === ME || ROLE === 'team') ? `<button type="button" class="ndel" data-ndel="${esc(u.i)}" aria-label="კომენტარის წაშლა">${TI.trash}</button>` : ''}</div>
-      <p>${richText(u.v)}</p></li>`).join('')}</ul>` : '<p class="tp-empty">კომენტარი ჯერ არ არის. დაწერე პირველი და მონიშნე ადამიანი @-ით.</p>'}
+      ${u.v ? `<p>${richText(u.v)}</p>` : ''}${(u.f || []).length ? `<div class="tp-ph">${u.f.map(x => `<button type="button" class="ph" data-ph="${esc(x.id)}" aria-label="ფოტო ${esc(x.name || '')}"><img alt="" data-src="${esc(x.id)}"${x.local ? ` src="${x.local}"` : ''}></button>`).join('')}</div>` : ''}</li>`).join('')}</ul>` : '<p class="tp-empty">კომენტარი ჯერ არ არის. დაწერე პირველი და მონიშნე ადამიანი @-ით.</p>'}
     <div class="tp-foot"><span>შექმნა ${esc(t.by || '')}, ${fmt(t.created)}</span><button type="button" class="btn sm" data-pdel>${TI.trash}დავალების წაშლა</button></div>`;
   const ta = body.querySelector('.tp-comp textarea');
   ta.value = draft; if(focused){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-  wireMentions(ta);
+  wireMentions(ta); paintPend(); loadPhotos(body);
 }
 async function sendNote(){
-  const ta = panel.querySelector('.tp-comp textarea'), text = ta.value.trim(); if(!text || !panelId) return;
+  const ta = panel.querySelector('.tp-comp textarea'), text = ta.value.trim(); if((!text && !PEND.length) || !panelId) return;
+  if(PEND.some(p => !p.b64)){ toast('ფოტო ჯერ მზადდება, წამში სცადე.'); return; }
   const b = panel.querySelector('[data-psend]'); b.disabled = true;
-  const t = TASKS.find(x => x.id === panelId);
-  t.updates = [...(t.updates || []), {k: 'note', t: Date.now(), by: pname(ME) || 'მე', be: ME, v: text}];
-  ta.value = ''; paintPanel(); render();
-  if(!await taskCall({action:'hubTaskNote', id: panelId, text, m: mentionsIn(text)}, mentionsIn(text).filter(e => e !== ME).length ? 'კომენტარი გაიგზავნა, მონიშნულები ნახავენ' : '')){
-    const t2 = panel.querySelector('.tp-comp textarea'); if(t2) t2.value = text;
+  const t = TASKS.find(x => x.id === panelId), files = PEND.slice();
+  t.updates = [...(t.updates || []), {k: 'note', t: Date.now(), by: pname(ME) || 'მე', be: ME, v: text, f: files.map(p => ({id: 'local' + Math.random(), name: p.name, local: p.url}))}];
+  ta.value = ''; PEND = []; paintPanel(); render();
+  const ok = await taskCall({action:'hubTaskNote', id: panelId, text, m: mentionsIn(text), files: files.map(p => ({name: p.name, mime: p.mime, b64: p.b64, w: p.w, h: p.h}))},
+    files.length ? (files.length === 1 ? 'ფოტო გაიგზავნა' : `${files.length} ფოტო გაიგზავნა`) : mentionsIn(text).filter(e => e !== ME).length ? 'კომენტარი გაიგზავნა, მონიშნულები ნახავენ' : '');
+  if(!ok){ const t2 = panel.querySelector('.tp-comp textarea'); if(t2) t2.value = text; PEND = files; paintPend(); }
+}
+
+/* ---------- photos on comments: shrink in the browser, send with the comment, read back privately ---------- */
+const PH_ICON = SV('<rect x="3" y="5" width="18" height="15" rx="2.5"/><circle cx="9" cy="11" r="2"/><path d="m21 17-5.5-5.5L7 20"/>', 16);
+let PEND = [];
+const PHOTOS = new Map();   // drive file id -> object URL
+async function prepPhoto(file){
+  const bm = await createImageBitmap(file), k = Math.min(1, 1600 / Math.max(bm.width, bm.height));
+  const w = Math.round(bm.width * k), h = Math.round(bm.height * k), c = document.createElement('canvas');
+  c.width = w; c.height = h; c.getContext('2d').drawImage(bm, 0, 0, w, h);
+  const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.86));
+  const b64 = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+  return {b64, w, h, mime: 'image/jpeg'};
+}
+async function addPhotos(list){
+  const imgs = [...list].filter(f => /^image\//.test(f.type));
+  if(!imgs.length) return;
+  for(const f of imgs){
+    if(PEND.length >= 6){ toast('ერთ კომენტარში მაქსიმუმ 6 ფოტო.'); break; }
+    const p = {name: (f.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg', url: URL.createObjectURL(f)};
+    PEND.push(p); paintPend();
+    try{ Object.assign(p, await prepPhoto(f)); }
+    catch(e){ PEND = PEND.filter(x => x !== p); toast('ეს ფოტო ვერ წავიკითხე. სცადე JPG ან PNG.'); }
+    paintPend();
   }
+}
+function paintPend(){
+  const el = panel.querySelector('.tp-att'); if(!el) return;
+  el.innerHTML = PEND.map((p, i) => `<span class="pend${p.b64 ? '' : ' busy'}"><img src="${p.url}" alt=""><button type="button" data-unpend="${i}" aria-label="ფოტოს მოშორება">×</button></span>`).join('');
+}
+async function loadPhotos(root){
+  for(const img of root.querySelectorAll('img[data-src]:not([src])')){
+    const id = img.dataset.src; if(id.startsWith('local')) continue;
+    if(!PHOTOS.has(id)) PHOTOS.set(id, call({action:'hubTaskFile', pin: pin(), file: id}).then(r => {
+      const bin = atob(r.b64), a = new Uint8Array(bin.length); for(let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+      return URL.createObjectURL(new Blob([a], {type: r.mime}));
+    }).catch(() => { PHOTOS.delete(id); return ''; }));
+    PHOTOS.get(id).then(u => { if(u) img.src = u; });
+  }
+}
+function viewPhoto(src){
+  const v = document.createElement('div'); v.className = 'phview'; v.innerHTML = `<img src="${src}" alt=""><button type="button" aria-label="დახურვა">×</button>`;
+  v.onclick = () => v.remove(); document.body.appendChild(v);
 }
 panel.addEventListener('click', async e => {
   if(e.target.closest('[data-pclose]')){ leavePanel(); return; }
@@ -1054,11 +1099,19 @@ panel.addEventListener('click', async e => {
   if(pk){ if(popEl && popEl.dataset.for === t.id + pk.dataset.ppick){ closePop(); return; } openPop(pk, pk.dataset.ppick, t); popEl.dataset.for = t.id + pk.dataset.ppick; return; }
   if(e.target.closest('label.pv') && e.target.closest('.pm-row') && panel.querySelector('[data-pdue]') && e.target.closest('.pm-row').contains(panel.querySelector('[data-pdue]'))){ const i = panel.querySelector('[data-pdue]'); try{ i.showPicker(); }catch(err){ i.focus(); } e.preventDefault(); return; }
   if(e.target.closest('[data-psend]')){ sendNote(); return; }
+  if(e.target.closest('[data-pattach]')){ panel.querySelector('[data-pfile]').click(); return; }
+  const up = e.target.closest('[data-unpend]'); if(up){ PEND.splice(+up.dataset.unpend, 1); paintPend(); return; }
+  const ph = e.target.closest('[data-ph]'); if(ph){ const im = ph.querySelector('img'); if(im && im.src) viewPhoto(im.src); return; }
   const nd = e.target.closest('[data-ndel]');
   if(nd){ if(!confirm('წავშალო ეს კომენტარი?')) return; t.updates = t.updates.filter(u => u.i !== nd.dataset.ndel); paintPanel(); await taskCall({action:'hubTaskNoteDel', id: t.id, i: nd.dataset.ndel}, 'კომენტარი წაიშალა'); return; }
   if(e.target.closest('[data-pdel]')){ if(!confirm(`წავშალო დავალება „${t.title}“?`)) return; const id = t.id; closePanel(); TASKS = TASKS.filter(x => x.id !== id); render(); await taskCall({action:'hubTaskDelete', id}, 'დავალება წაიშალა'); }
 });
+panel.addEventListener('paste', e => { if(!e.target.closest('.tp-comp')) return; const fs = [...(e.clipboardData || {}).files || []].filter(f => /^image\//.test(f.type)); if(fs.length){ e.preventDefault(); addPhotos(fs); } });
+panel.addEventListener('dragover', e => { const c = e.target.closest('.tp-comp'); if(c){ e.preventDefault(); c.classList.add('drop'); } });
+panel.addEventListener('dragleave', e => { const c = e.target.closest('.tp-comp'); if(c) c.classList.remove('drop'); });
+panel.addEventListener('drop', e => { const c = e.target.closest('.tp-comp'); if(!c) return; e.preventDefault(); c.classList.remove('drop'); addPhotos(e.dataTransfer.files); });
 panel.addEventListener('change', e => {
+  if(e.target.matches('[data-pfile]')){ addPhotos(e.target.files); e.target.value = ''; return; }
   if(e.target.matches('[data-pdue]')) editTask(panelId, {due: e.target.value});
   if(e.target.matches('[data-pgrp]')){ const grp = e.target.value; editTask(panelId, {grp, pos: Math.max(0, ...TASKS.filter(t => grpOf(t) === grp).map(t => t.pos || 0)) + 1000}, `გადავიდა: ${(GROUPS.find(g => g.id === grp) || {}).name}`); }
 });
@@ -1218,7 +1271,8 @@ function demoCall(body){
   if(body.action === 'hubLeadEdit') Object.assign(L(body.id), body.lead);
   if(body.action === 'hubTaskAdd') DEMO_TASKS.push({id: 'T' + Date.now(), created: Date.now(), notes: '', owners: [], status: 'todo', priority: '', due: '', ...body.task, by: 'თამარი', creator: 'tamari@demo', updated: Date.now(), updates: [{t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'add'}]});
   if(body.action === 'hubTaskEdit') Object.assign(DEMO_TASKS.find(t => t.id === body.id), body.task, {updated: Date.now()});
-  if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({i: 'n' + Date.now(), t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'note', v: body.text, m: body.m});
+  if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({i: 'n' + Date.now(), t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'note', v: body.text, m: body.m, f: (body.files || []).map((f, k) => { const id = 'demo' + Date.now() + k; (window.__DEMO_FILES = window.__DEMO_FILES || {})[id] = f; return {id, name: f.name, w: f.w, h: f.h}; })});
+  if(body.action === 'hubTaskFile') return new Promise(r => setTimeout(() => r(window.__DEMO_FILES[body.file]), 200));
   if(body.action === 'hubTaskNoteDel'){ const t = DEMO_TASKS.find(t => t.id === body.id); t.updates = t.updates.filter(u => u.i !== body.i); }
   if(body.action === 'hubGroupSave') DEMO_GROUPS = body.groups;
   if(body.action === 'hubLinksSave') DEMO_LINKS = body.links;
