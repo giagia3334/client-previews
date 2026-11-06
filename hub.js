@@ -932,14 +932,9 @@ function favicon(u){
 function renderLinks(){
   const el = $('#tkLinks'); el.hidden = !CAN_TASKS; if(!CAN_TASKS) return;
   el.classList.toggle('editing', qEdit);
-  el.innerHTML = `<div class="ql">
-    <div class="qlh"><b>სწრაფი ბმულები</b><button type="button" class="linkbtn" data-qedit>${qEdit ? 'მზადაა' : 'ბმულების შეცვლა'}</button></div>
-    ${QG.map(([g, name]) => {
-      const L = LINKS.map((l, i) => [l, i]).filter(([l]) => l.g === g);
-      if(!L.length && !qEdit) return '';
-      return `<div class="qlr"><span class="qlg">${name}</span><div class="qlc">${L.map(([l, i]) => `<a class="qchip" href="${esc(l.u)}" target="_blank" rel="noopener" title="${esc(l.u)}"><img src="${esc(favicon(l.u))}" alt="" width="16" height="16" loading="lazy">${esc(l.t)}${qEdit ? `<button type="button" class="qx" data-qdel="${i}" aria-label="${esc(l.t)}: წაშლა">×</button>` : ''}</a>`).join('')}
-        ${qEdit ? `<button type="button" class="qchip qadd" data-qadd="${g}">${I.plus}დამატება</button>` : ''}</div></div>`;
-    }).join('')}</div>`;
+  const groups = QG.map(([g, name]) => [g, name, LINKS.map((l, i) => [l, i]).filter(([l]) => l.g === g)]).filter(([, , L]) => L.length || qEdit);
+  el.innerHTML = `<div class="ql"><div class="qlc">${groups.map(([g, name, L], k) => `${k ? '<span class="qsep" aria-hidden="true"></span>' : ''}${L.map(([l, i]) => `<a class="qchip" href="${esc(l.u)}" target="_blank" rel="noopener" title="${esc(name)}: ${esc(l.u)}"><img src="${esc(favicon(l.u))}" alt="" width="16" height="16" loading="lazy">${esc(l.t)}${qEdit ? `<button type="button" class="qx" data-qdel="${i}" aria-label="${esc(l.t)}: წაშლა">×</button>` : ''}</a>`).join('')}${qEdit ? `<button type="button" class="qchip qadd" data-qadd="${g}" title="დამატება: ${esc(name)}">${I.plus}${esc(name)}</button>` : ''}`).join('')}</div>
+    <button type="button" class="qedit" data-qedit title="${qEdit ? 'მზადაა' : 'ბმულების შეცვლა'}" aria-label="${qEdit ? 'მზადაა' : 'ბმულების შეცვლა'}">${qEdit ? I.check : SV('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', 16)}</button></div>`;
 }
 function saveLinks(msg){ renderLinks(); return taskCall({action:'hubLinksSave', links: LINKS}, msg); }
 $('#tkLinks').addEventListener('click', e => {
