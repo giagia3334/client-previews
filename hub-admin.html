@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>კლიენტის აპის მართვა</title>
-<link rel="stylesheet" href="hub.css?v=18">
+<link rel="stylesheet" href="hub.css?v=20">
 <style>
 html,body{margin:0;min-height:100%}
 body{background:var(--h-bg);color:var(--h-fg);font-family:var(--font);-webkit-font-smoothing:antialiased}
@@ -36,6 +36,7 @@ body{background:var(--h-bg);color:var(--h-fg);font-family:var(--font);-webkit-fo
 .u:first-child{border-top:0}
 .u input{flex:1;min-width:0}
 .u select{width:auto}
+.u .tk{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--h-sub);white-space:nowrap;cursor:pointer}
 .u .x{flex:none;width:38px;height:38px;border-radius:50%;justify-content:center;padding:0}
 #gbtn{min-height:44px}
 body.dark .msg.err{color:#F2B8B5}
@@ -75,7 +76,7 @@ body.dark .msg.err{color:#F2B8B5}
 
     <section class="box">
       <h2>ვის აქვს წვდომა</h2>
-      <p>ამ Gmail-ებით შესვლისას პაციენტები და ანალიტიკა ჩანს. მეილს თუ წაშლი, ის წვდომას მაშინვე კარგავს. „გუნდს“ ამ გვერდის გახსნაც შეუძლია.</p>
+      <p>ამ Gmail-ებით შესვლისას პაციენტები და ანალიტიკა ჩანს. „დავალებები“ მხოლოდ მონიშნულებს უჩანთ. მეილს თუ წაშლი, ის წვდომას მაშინვე კარგავს. „გუნდს“ ამ გვერდის გახსნაც შეუძლია.</p>
       <div id="users"></div>
       <div class="row"><button class="btn" type="button" id="userAdd">+ მეილის დამატება</button></div>
       <p>ახალი მეილი Google Cloud-ის სატესტო სიაშიც უნდა დაემატოს (Likedent Hub → Audience → Test users), სანამ აპი ტესტის რეჟიმშია.</p>
@@ -104,10 +105,11 @@ const escA = v => String(v).replace(/[&"<>]/g, c => ({'&':'&amp;','"':'&quot;','
 function renderUsers(){
   $('#users').innerHTML = USERS.map((u, i) => `<div class="u"><input class="btn" style="font-weight:500;max-width:120px" data-un="${i}" value="${escA(u.name || '')}" placeholder="სახელი" maxlength="40" autocomplete="off"><input class="btn" style="font-weight:500" type="email" data-ue="${i}" value="${escA(u.email)}" placeholder="name@gmail.com" autocomplete="off">
     <select class="btn" data-ur="${i}"><option value="clinic" ${u.role !== 'team' ? 'selected' : ''}>კლინიკა</option><option value="team" ${u.role === 'team' ? 'selected' : ''}>გუნდი</option></select>
+    <label class="tk" title="ხედავს დავალებებს (მხოლოდ შიდა გუნდი)"><input type="checkbox" data-ut="${i}" ${u.tasks ? 'checked' : ''}>დავალებები</label>
     <button class="btn x" type="button" data-ux="${i}" aria-label="წაშლა">✕</button></div>`).join('');
 }
 $('#users').addEventListener('input', e => { const t = e.target; if(t.dataset.ue) USERS[t.dataset.ue].email = t.value.trim(); if(t.dataset.un) USERS[t.dataset.un].name = t.value.trim(); if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
-$('#users').addEventListener('change', e => { const t = e.target; if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; });
+$('#users').addEventListener('change', e => { const t = e.target; if(t.dataset.ur) USERS[t.dataset.ur].role = t.value; if(t.dataset.ut) USERS[t.dataset.ut].tasks = t.checked; });
 $('#users').addEventListener('click', e => { const x = e.target.closest('[data-ux]'); if(x){ USERS.splice(+x.dataset.ux, 1); renderUsers(); } });
 $('#userAdd').onclick = () => { USERS.push({email:'', role:'clinic', name:''}); renderUsers(); $('#users').lastElementChild.querySelector('input').focus(); };
 const setTheme = t => { document.body.classList.toggle('dark', t === 'dark'); ls.set('igs_theme', t); };

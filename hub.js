@@ -100,7 +100,7 @@ shell.innerHTML = `
       <div class="body" id="ptBody"></div>
     </section>
     <section class="pane" id="pTasks" hidden>
-      <div class="head"><div class="ttl"><h1>დავალებები</h1><p id="tkSub">ვინ რას აკეთებს და რა ვადაში.</p></div><button type="button" class="btn primary" id="tkAdd" hidden>${I.plus}ახალი დავალება</button></div>
+      <div class="head"><div class="ttl"><h1>დავალებები</h1><p id="tkSub">ვინ რას აკეთებს და რა ვადაში.</p></div><button type="button" class="icon-btn bell" id="tkBell" aria-label="შეტყობინებები" hidden><i hidden></i></button><button type="button" class="btn primary" id="tkAdd" hidden>${I.plus}ახალი დავალება</button></div>
       <div class="body" id="tkBody"></div>
     </section>
     <section class="pane" id="pAnalytics" hidden>
@@ -141,7 +141,7 @@ document.querySelectorAll('.seg button').forEach(b => segRO.observe(b));
 if(document.fonts) document.fonts.ready.then(() => document.querySelectorAll('.seg').forEach(moveThumb));
 
 function showTab(t){
-  if(!TABS[t]) t = ['content','patients','tasks','analytics'].find(k => TABS[k]) || 'content';
+  if(!tabOk(t)) t = ['content','patients','tasks','analytics'].find(tabOk) || 'content';
   cur = t;
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === t ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   Object.entries(panes).forEach(([k, el]) => el.hidden = k !== t);
@@ -153,9 +153,9 @@ function showTab(t){
 }
 document.addEventListener('click', e => { const b = e.target.closest('.nav-i[data-tab], .tabbar [data-tab]'); if(b) showTab(b.dataset.tab); });
 function setupNav(){
-  document.querySelectorAll('[data-tab]').forEach(b => b.hidden = !TABS[b.dataset.tab]);
+  navVis();
   const want = (location.hash || '').slice(1);
-  showTab(TABS[want] ? want : 'content');
+  showTab(tabOk(want) ? want : 'content');
 }
 const pauseIg = () => document.querySelectorAll('#feed video, .reelv video').forEach(v => v.pause());
 
@@ -463,12 +463,13 @@ function take(r){
   SPEND = (r.settings || {}).spend || {}; ROLE = r.role || '';
   const n = LEADS.filter(l => l.stage === 'new').length;
   document.querySelectorAll('[data-tab="patients"] .n').forEach(d => { d.textContent = n; d.hidden = !n; });
-  TASKS = r.tasks || []; PEOPLE = r.people || [];
-  const mine = ME ? TASKS.filter(t => t.owner === ME && t.status !== 'done').length : 0;
-  document.querySelectorAll('[data-tab="tasks"] .n').forEach(d => { d.textContent = mine; d.hidden = !mine; });
+  CAN_TASKS = !!r.canTasks; TASKS = r.tasks || []; PEOPLE = r.people || []; GROUPS = r.groups || [];
+  loaded = true; navVis(); paintBadge();
+  if(cur === 'tasks' && !CAN_TASKS) showTab('content');
+  if(panelId) paintPanel();
 }
 function render(err){
-  $('#ptAdd').hidden = !loaded; $('#tkAdd').hidden = !loaded;
+  $('#ptAdd').hidden = !loaded; $('#tkAdd').hidden = !(loaded && CAN_TASKS); $('#tkBell').hidden = !(loaded && CAN_TASKS && ME);
   if(!loaded){ $('#ptBody').innerHTML = lockHTML(err); $('#anBody').innerHTML = lockHTML(err); $('#tkBody').innerHTML = lockHTML(err); drawGoogle(); return; }
   if(cur === 'patients') renderPatients();
   if(cur === 'tasks') renderTasks();
@@ -598,113 +599,257 @@ function openLead(id){
   sh.hidden = false;
 }
 
-/* ---------- tasks: a small monday-style board ---------- */
-let TASKS = [], PEOPLE = [], tkWho = 'all', showDone = false, popEl = null;
+/* ---------- tasks: monday-style board for the internal team (groups, people, status, updates) ---------- */
+let TASKS = [], PEOPLE = [], GROUPS = [], CAN_TASKS = false, tkWho = 'all', tkQ = '', hideDone = false, popEl = null, panelId = null, dragging = false;
+const SEENKEY = 'hub_tk_seen_' + CLIENT, FOLDKEY = 'hub_tk_fold_' + CLIENT;
+let FOLD = (() => { try{ return JSON.parse(ls.get(FOLDKEY) || '{}'); }catch(e){ return {}; } })();
 const TST = [
   {id:'todo',  label:'დასაწყები'},
   {id:'doing', label:'მიმდინარე'},
   {id:'stuck', label:'გაჭედილი'},
   {id:'done',  label:'დასრულდა'},
 ];
-const TPR = [{id:'high', label:'მაღალი'}, {id:'mid', label:'საშუალო'}, {id:'low', label:'დაბალი'}, {id:'', label:'—'}];
+const TPR = [{id:'high', label:'მაღალი'}, {id:'mid', label:'საშუალო'}, {id:'low', label:'დაბალი'}, {id:'', label:''}];
+const GCOL = ['#579BFC','#A25DDC','#00C875','#FDAB3D','#E2445C','#037F4C','#FF7575','#225091','#7F5347','#808080'];
 const AVC = ['#A07800','#0E6B53','#5B4FC4','#C2410C','#0F6E9E','#A23B72'];
+const TI = {
+  grip: '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="3" r="1.3"/><circle cx="9.5" cy="3" r="1.3"/><circle cx="4.5" cy="7" r="1.3"/><circle cx="9.5" cy="7" r="1.3"/><circle cx="4.5" cy="11" r="1.3"/><circle cx="9.5" cy="11" r="1.3"/></svg>',
+  bubble: SV('<path d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>', 18),
+  bubblePlus: SV('<path d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/><path d="M12 7.5v5M9.5 10h5"/>', 18),
+  bell: SV('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>', 19),
+  chev: SV('<path d="m6 9 6 6 6-6"/>', 18),
+  search: SV('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', 17),
+  x: SV('<path d="M6 6l12 12M18 6 6 18"/>', 20),
+  trash: SV('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>', 16),
+  user: SV('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/>', 16),
+  dots: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+};
+$('#tkBell').insertAdjacentHTML('afterbegin', TI.bell);
 const person = e => PEOPLE.find(p => p.email === e);
-const pname = e => (person(e) || {}).name || (e ? e.split('@')[0] : '');
+const pname = e => (person(e) || {}).name || (e ? String(e).split('@')[0] : '');
 const avColor = e => AVC[[...String(e)].reduce((a, c) => a + c.charCodeAt(0), 0) % AVC.length];
-const avHTML = (e, cls = '') => e ? `<span class="av ${cls}" style="--c:${avColor(e)}" title="${esc(pname(e))}">${esc([...pname(e)][0] || '?')}</span>` : `<span class="av empty ${cls}" title="არავის აქვს">${SV('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/>', 15)}</span>`;
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const initial = e => ([...pname(e)][0] || '?');
+/* Georgian letters hang above or below the line (გ has a tail): measure each letter and centre its ink */
+const INK = {};
+function inkShift(ch){
+  if(ch in INK) return INK[ch];
+  try{ const c = document.createElement('canvas').getContext('2d'); c.font = '700 13px "Noto Sans Georgian"'; c.textBaseline = 'middle';
+    const m = c.measureText(ch); INK[ch] = Math.round((m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2 * 10) / 10; }catch(e){ INK[ch] = 0; }
+  return INK[ch];
+}
+if(document.fonts) document.fonts.ready.then(() => { for(const k in INK) delete INK[k]; if(cur === 'tasks' && loaded) renderTasks(); });
+const avHTML = (e, cls = '') => e ? `<span class="av ${cls}" style="--c:${avColor(e)}" title="${esc(pname(e))}"><b style="transform:translateY(${inkShift(initial(e))}px)">${esc(initial(e))}</b></span>` : `<span class="av nobody ${cls}" title="არავის აქვს">${TI.user}</span>`;
+const avsHTML = list => !list.length ? avHTML('') : `<span class="avs">${list.slice(0, 3).map(e => avHTML(e)).join('')}${list.length > 3 ? `<span class="av more">+${list.length - 3}</span>` : ''}</span>`;
+const dayStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today = () => dayStr(new Date());
 function dueHTML(t){
   if(!t.due) return '<span class="dd none">ვადა</span>';
   const [y, m, d] = t.due.split('-').map(Number), late = t.status !== 'done' && t.due < today(), now = t.due === today();
-  return `<span class="dd ${late ? 'late' : now ? 'now' : ''}">${now ? 'დღეს' : `${d} ${MONTHS[m - 1]}`}${y !== new Date().getFullYear() ? ' ' + y : ''}</span>`;
+  const tom = t.due === dayStr(new Date(Date.now() + 864e5));
+  return `<span class="dd ${late ? 'late' : now ? 'now' : ''}">${now ? 'დღეს' : tom ? 'ხვალ' : `${d} ${MONTHS[m - 1]}`}${!now && !tom && y !== new Date().getFullYear() ? ' ' + y : ''}</span>`;
 }
 const stLabel = id => (TST.find(s => s.id === id) || TST[0]).label;
 const prLabel = id => (TPR.find(s => s.id === id) || TPR[3]).label;
-function taskRow(t){
-  const n = (t.updates || []).filter(u => u.k === 'note').length;
-  return `<div class="trow" data-task="${esc(t.id)}" role="row">
-    <button type="button" class="tname" data-topen title="გახსნა"><span>${esc(t.title)}</span>${n ? `<i class="tn">${I.note}${n}</i>` : `<i class="tn ghost">${I.note}</i>`}</button>
-    <button type="button" class="tc tc-own" data-tpick="owner" aria-label="პასუხისმგებელი: ${esc(pname(t.owner) || 'არავინ')}">${avHTML(t.owner)}<span class="on">${esc(pname(t.owner) || '')}</span></button>
+const notesOf = t => (t.updates || []).filter(u => u.k === 'note');
+const grpOf = t => GROUPS.some(g => g.id === t.grp) ? t.grp : (GROUPS[0] || {}).id;
+const byPos = (a, b) => (a.pos || 0) - (b.pos || 0) || a.created - b.created;
+const ago = ts => { const s = (Date.now() - ts) / 1000; return s < 60 ? 'ახლახან' : s < 3600 ? Math.floor(s / 60) + ' წთ' : s < 86400 ? Math.floor(s / 3600) + ' სთ' : fmt(ts); };
+/* @mentions: highlight names of people on the board */
+function richText(text){
+  let h = esc(text);
+  PEOPLE.slice().sort((a, b) => b.name.length - a.name.length).forEach(p => {
+    const n = esc('@' + p.name);
+    h = h.split(n).join(`<span class="mention${p.email === ME ? ' me' : ''}">${n}</span>`);
+  });
+  return h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+}
+const mentionsIn = text => PEOPLE.filter(p => text.includes('@' + p.name)).map(p => p.email);
+
+/* notifications: someone mentioned me or gave me a task */
+function notifs(){
+  if(!ME) return [];
+  const out = [];
+  TASKS.forEach(t => (t.updates || []).forEach(u => {
+    if(u.be === ME) return;
+    if(u.k === 'note' && (u.m || []).includes(ME)) out.push({t: u.t, task: t, by: u.by, what: 'მოგნიშნა', text: u.v});
+    if(u.k === 'owners' && (u.add || []).includes(ME)) out.push({t: u.t, task: t, by: u.by, what: 'დაგავალა'});
+  }));
+  return out.sort((a, b) => b.t - a.t).slice(0, 30);
+}
+const unseen = () => { const s = Number(ls.get(SEENKEY) || 0); return notifs().filter(n => n.t > s).length; };
+function paintBadge(){
+  const n = unseen();
+  document.querySelectorAll('[data-tab="tasks"] .n').forEach(d => { d.textContent = n; d.hidden = !n; });
+  const b = $('#tkBell'); if(b){ b.querySelector('i').textContent = n; b.querySelector('i').hidden = !n; }
+}
+function tabOk(t){ return !!TABS[t] && (t !== 'tasks' || !loaded || CAN_TASKS); }
+function navVis(){ document.querySelectorAll('[data-tab]').forEach(b => b.hidden = !tabOk(b.dataset.tab)); }
+
+/* ---------- board ---------- */
+function visible(t){
+  if(tkWho !== 'all' && !(t.owners || []).includes(tkWho)) return false;
+  if(hideDone && t.status === 'done') return false;
+  if(tkQ){
+    const q = tkQ.toLowerCase();
+    if(!(t.title + ' ' + t.notes + ' ' + notesOf(t).map(u => u.v).join(' ')).toLowerCase().includes(q)) return false;
+  }
+  return true;
+}
+function rowHTML(t){
+  const n = notesOf(t).length, last = notesOf(t).slice(-1)[0];
+  const sub = t.notes ? `<span class="tdesc">${esc(t.notes.split('\n')[0].slice(0, 160))}</span>` : last ? `<span class="tdesc tlast"><b>${esc(last.by)}:</b> ${esc(last.v.slice(0, 140))}</span>` : '';
+  return `<div class="trow${panelId === t.id ? ' open' : ''}" data-task="${esc(t.id)}">
+    <span class="grip" data-grip title="გადაათრიე ზემოთ ან ქვემოთ" aria-hidden="true">${TI.grip}</span>
+    <div class="tname" data-topen tabindex="0" role="button" aria-label="${esc(t.title)}: გახსნა">
+      <span class="tt">${esc(t.title)}</span>${sub}
+    </div>
+    <button type="button" class="tbub${n ? ' has' : ''}" data-topen aria-label="კომენტარები: ${n}">${n ? TI.bubble : TI.bubblePlus}${n ? `<i>${n}</i>` : ''}</button>
+    <button type="button" class="tc tc-own" data-tpick="owners" aria-label="ვისზეა: ${esc((t.owners || []).map(pname).join(', ') || 'არავის')}">${avsHTML(t.owners || [])}</button>
     <button type="button" class="tc tc-st st-${esc(t.status)}" data-tpick="status">${stLabel(t.status)}</button>
     <button type="button" class="tc tc-pr pr-${esc(t.priority || 'none')}" data-tpick="priority">${prLabel(t.priority)}</button>
     <label class="tc tc-due">${dueHTML(t)}<input type="date" value="${esc(t.due)}" data-tdue aria-label="ვადა"></label>
   </div>`;
 }
+function groupHTML(g){
+  const all = TASKS.filter(t => grpOf(t) === g.id), L = all.filter(visible).sort(byPos), fold = FOLD[g.id];
+  const counts = TST.map(s => [s, all.filter(t => t.status === s.id).length]).filter(([, n]) => n);
+  const bar = all.length ? `<span class="tbar" title="${counts.map(([s, n]) => `${s.label}: ${n}`).join(', ')}">${counts.map(([s, n]) => `<i class="st-${s.id}" style="flex:${n}"></i>`).join('')}</span>` : '';
+  return `<section class="tgrp${fold ? ' fold' : ''}" data-grp="${esc(g.id)}" style="--g:${esc(g.color)}">
+    <div class="tgh">
+      <button type="button" class="gchev" data-gfold aria-expanded="${!fold}" aria-label="${fold ? 'გაშლა' : 'აკეცვა'}">${TI.chev}</button>
+      <button type="button" class="gname" data-gmenu title="სახელი, ფერი, წაშლა">${esc(g.name)}</button>
+      <span class="gcount">${all.length} დავალება</span>${bar}
+    </div>
+    ${fold ? '' : `<div class="ttbl">
+      <div class="thead"><span></span><span>დავალება</span><span></span><span>ვისზეა</span><span>სტატუსი</span><span>პრიორიტეტი</span><span>ვადა</span></div>
+      <div class="trows">${L.map(rowHTML).join('')}</div>
+      <form class="tadd" data-tadd><input name="title" maxlength="200" placeholder="+ დავალების დამატება" autocomplete="off" aria-label="ახალი დავალება ჯგუფში ${esc(g.name)}"><button class="btn sm primary" type="submit">დამატება</button></form>
+    </div>`}
+  </section>`;
+}
 function renderTasks(){
-  const L = TASKS.filter(t => tkWho === 'all' || t.owner === tkWho);
-  const open = L.filter(t => t.status !== 'done').sort((a, b) => (a.due || '9') < (b.due || '9') ? -1 : (a.due || '9') > (b.due || '9') ? 1 : b.created - a.created);
-  const done = L.filter(t => t.status === 'done').sort((a, b) => b.updated - a.updated);
-  const late = open.filter(t => t.due && t.due < today()).length, mine = ME ? TASKS.filter(t => t.owner === ME && t.status !== 'done').length : 0;
-  $('#tkSub').textContent = ME && mine ? `შენზეა ${mine} ღია დავალება${late ? `, ${late} ვადაგადაცილებული` : ''}.` : late ? `${late} დავალებას ვადა გადაუცილდა.` : 'ვინ რას აკეთებს და რა ვადაში.';
+  if(!CAN_TASKS){ $('#tkBody').innerHTML = '<div class="empty">დავალებები მხოლოდ შიდა გუნდისთვისაა.</div>'; return; }
+  const mineOpen = ME ? TASKS.filter(t => (t.owners || []).includes(ME) && t.status !== 'done').length : 0;
+  const late = TASKS.filter(t => t.due && t.due < today() && t.status !== 'done').length;
+  $('#tkSub').textContent = ME ? `შენზეა ${mineOpen} ღია დავალება${late ? `, ვადაგადაცილებულია ${late}` : ''}.` : 'ვინ რას აკეთებს და რა ვადაში.';
   const who = [['all', 'ყველა'], ...PEOPLE.filter(p => p.email === ME).map(p => [p.email, 'ჩემი']), ...PEOPLE.filter(p => p.email !== ME).map(p => [p.email, p.name])];
-  const head = `<div class="thead" role="row"><span>დავალება</span><span>ვისზეა</span><span>სტატუსი</span><span>პრიორიტეტი</span><span>ვადა</span></div>`;
-  const counts = TST.map(s => [s, open.concat(done).filter(t => t.status === s.id).length]).filter(([, n]) => n);
-  const bar = L.length ? `<div class="tbar" aria-hidden="true">${counts.map(([s, n]) => `<i class="st-${s.id}" style="flex:${n}" title="${s.label}: ${n}"></i>`).join('')}</div>` : '';
+  const keepQ = document.activeElement && document.activeElement.id === 'tkQ';
   $('#tkBody').innerHTML = `
-    <div class="tfil"><div class="seg" role="group" aria-label="ვისი დავალებები" id="tkSeg"><span class="thumb"></span>${who.map(([k, t]) => `<button type="button" data-who="${esc(k)}" aria-pressed="false">${esc(t)}</button>`).join('')}</div></div>
-    <section class="tgrp g-open">
-      <div class="tgh"><b>ღია დავალებები</b><i>${open.length}</i>${bar}</div>
-      <div class="ttbl" role="table">${head}${open.map(taskRow).join('')}
-        <form class="tadd" data-tadd><span class="plus">${I.plus}</span><input name="title" maxlength="160" placeholder="+ დავალების დამატება" autocomplete="off" aria-label="ახალი დავალება"><button class="btn sm primary" type="submit">დამატება</button></form>
-      </div>
-      ${!open.length ? `<div class="empty">${tkWho === 'all' ? 'ღია დავალება არ არის. ჩაწერეთ ახალი ზემოთ.' : `${esc(pname(tkWho))}-ზე ღია დავალება არ არის.`}</div>` : ''}
-    </section>
-    <section class="tgrp g-done">
-      <button type="button" class="tgh" data-tdone aria-expanded="${showDone}"><span class="chev">${SV('<path d="m9 6 6 6-6 6"/>', 16)}</span><b>დასრულებული</b><i>${done.length}</i></button>
-      ${showDone && done.length ? `<div class="ttbl" role="table">${head}${done.map(taskRow).join('')}</div>` : ''}
-    </section>`;
+    <div class="ttools">
+      <label class="tsearch">${TI.search}<input id="tkQ" type="search" placeholder="ძებნა" value="${esc(tkQ)}" autocomplete="off" aria-label="დავალების ძებნა"></label>
+      <div class="seg" role="group" aria-label="ვისი დავალებები" id="tkSeg"><span class="thumb"></span>${who.map(([k, t]) => `<button type="button" data-who="${esc(k)}" aria-pressed="false">${esc(t)}</button>`).join('')}</div>
+      <button type="button" class="chip" data-hidedone aria-pressed="${hideDone}">დასრულებულის დამალვა</button>
+    </div>
+    ${GROUPS.map(groupHTML).join('')}
+    <button type="button" class="btn sm gadd" data-gadd>${I.plus}ახალი ჯგუფი</button>`;
   setSeg($('#tkSeg'), 'data-who', tkWho);
   $('#tkSeg').querySelectorAll('button').forEach(b => segRO.observe(b));
+  if(keepQ){ const q = $('#tkQ'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  paintBadge();
 }
 async function taskCall(body, okMsg){
   busy++;
   try{ take(await call(Object.assign({pin: pin()}, body))); if(okMsg) toast(okMsg); return true; }
-  catch(e){ toast(/delete/.test(e.message) ? 'წაშლა შეუძლია მხოლოდ შემქმნელს ან გუნდს.' : 'ვერ შეინახა. სცადეთ თავიდან.'); return false; }
+  catch(e){ toast(/team only/.test(e.message) ? 'დავალებები მხოლოდ შიდა გუნდისთვისაა.' : 'ვერ შეინახა. სცადეთ თავიდან.'); return false; }
   finally{ busy--; render(); }
 }
 function editTask(id, patch, msg){
   const t = TASKS.find(x => x.id === id); if(!t) return;
-  Object.assign(t, patch); if(patch.status) t.updated = Date.now(); render();
+  Object.assign(t, patch); render();
   return taskCall({action:'hubTaskEdit', id, task: patch}, msg);
 }
-/* the coloured option list that opens from a cell, like on monday */
+function saveGroups(){ render(); return taskCall({action:'hubGroupSave', groups: GROUPS}); }
+
+/* the option list that opens from a cell, like on monday */
 function closePop(){ if(popEl){ popEl.remove(); popEl = null; } }
-function openPop(cell, kind, t){
-  closePop();
-  const list = kind === 'status' ? TST.map(s => [s.id, s.label, 'st-' + s.id])
-    : kind === 'priority' ? TPR.map(s => [s.id, s.label, 'pr-' + (s.id || 'none')])
-    : [...PEOPLE.map(p => [p.email, p.name, 'own']), ['', 'არავის', 'own']];
-  popEl = document.createElement('div');
-  popEl.className = 'tpop k-' + kind; popEl.setAttribute('role', 'listbox');
-  popEl.innerHTML = list.map(([v, l, c]) => `<button type="button" class="${c}" data-v="${esc(v)}" aria-selected="${(t[kind] || '') === v}">${kind === 'owner' ? avHTML(v) : ''}<span>${esc(l)}</span></button>`).join('');
-  document.body.appendChild(popEl);
-  const r = cell.getBoundingClientRect(), w = Math.max(r.width, 180), h = popEl.offsetHeight;
+function placePop(cell){
+  const r = cell.getBoundingClientRect(), w = Math.max(popEl.offsetWidth, r.width, 190), h = popEl.offsetHeight;
   popEl.style.width = w + 'px';
   popEl.style.left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8) + 'px';
   popEl.style.top = (r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+}
+function openPop(cell, kind, t){
+  closePop();
+  popEl = document.createElement('div');
+  popEl.className = 'tpop k-' + kind; popEl.dataset.for = t.id + kind;
+  const paint = () => {
+    if(kind === 'owners') popEl.innerHTML = `<small>ვისზეა (შეგიძლია რამდენიმე მონიშნო)</small>` + PEOPLE.map(p => `<button type="button" data-v="${esc(p.email)}" role="menuitemcheckbox" aria-checked="${(t.owners || []).includes(p.email)}">${avHTML(p.email)}<span>${esc(p.name)}${p.email === ME ? ' (მე)' : ''}</span><i class="ck">${I.check}</i></button>`).join('');
+    else popEl.innerHTML = (kind === 'status' ? TST.map(s => [s.id, s.label, 'st-' + s.id]) : TPR.map(s => [s.id, s.label || 'არ არის', 'pr-' + (s.id || 'none')]))
+      .map(([v, l, c]) => `<button type="button" class="${c}" data-v="${esc(v)}" aria-selected="${(t[kind] || '') === v}">${esc(l)}</button>`).join('');
+  };
+  paint(); document.body.appendChild(popEl); placePop(cell);
   popEl.onclick = e => {
     const b = e.target.closest('[data-v]'); if(!b) return;
-    const v = b.dataset.v; closePop();
+    const v = b.dataset.v;
+    if(kind === 'owners'){
+      const now = t.owners || [], next = now.includes(v) ? now.filter(x => x !== v) : [...now, v];
+      editTask(t.id, {owners: next}, !now.includes(v) && v !== ME ? `დავალება მიეწერა: ${pname(v)}` : '');
+      paint(); return;
+    }
+    closePop();
     if((t[kind] || '') === v) return;
-    editTask(t.id, {[kind]: v}, kind === 'status' && v === 'done' ? `„${t.title}“ დასრულდა` : kind === 'owner' && v ? `დავალება გადაეცა: ${pname(v)}` : '');
+    editTask(t.id, {[kind]: v}, kind === 'status' && v === 'done' ? `„${t.title}“ დასრულდა` : '');
   };
-  popEl.querySelector('[aria-selected="true"]')?.focus({preventScroll:true});
 }
-document.addEventListener('pointerdown', e => { if(popEl && !popEl.contains(e.target) && !e.target.closest('[data-tpick]')) closePop(); }, true);
-document.addEventListener('keydown', e => { if(e.key === 'Escape') closePop(); });
-$('#pTasks').addEventListener('scroll', closePop, {passive:true});
+function openGroupMenu(btn, g){
+  closePop();
+  popEl = document.createElement('div'); popEl.className = 'tpop k-group'; popEl.dataset.for = 'g' + g.id;
+  const empty = !TASKS.some(t => grpOf(t) === g.id);
+  popEl.innerHTML = `<input class="gin" value="${esc(g.name)}" maxlength="60" aria-label="ჯგუფის სახელი">
+    <div class="sw">${GCOL.map(c => `<button type="button" data-col="${c}" style="--c:${c}" aria-label="ფერი" aria-pressed="${c === g.color}"></button>`).join('')}</div>
+    ${GROUPS.length > 1 ? `<button type="button" class="gdel" data-gdel ${empty ? '' : 'disabled'}>${TI.trash}${empty ? 'ჯგუფის წაშლა' : 'წასაშლელად ჯერ დავალებები გადაიტანე'}</button>` : ''}`;
+  document.body.appendChild(popEl); placePop(btn);
+  const inp = popEl.querySelector('.gin'); inp.focus(); inp.select();
+  const commit = () => { const v = inp.value.trim(); if(v && v !== g.name){ g.name = v; saveGroups(); } };
+  inp.onkeydown = e => { if(e.key === 'Enter'){ commit(); closePop(); } };
+  inp.onblur = commit;
+  popEl.onclick = e => {
+    const c = e.target.closest('[data-col]'); if(c){ g.color = c.dataset.col; closePop(); saveGroups(); return; }
+    if(e.target.closest('[data-gdel]') && empty){ GROUPS = GROUPS.filter(x => x !== g); closePop(); saveGroups(); }
+  };
+}
+function openBell(btn){
+  closePop();
+  const N = notifs(), seen = Number(ls.get(SEENKEY) || 0);
+  popEl = document.createElement('div'); popEl.className = 'tpop k-bell'; popEl.dataset.for = 'bell';
+  popEl.innerHTML = `<small>შეტყობინებები</small>` + (N.length ? N.map(n => `<button type="button" class="nt${n.t > seen ? ' new' : ''}" data-nopen="${esc(n.task.id)}">
+      <span class="nh"><b>${esc(n.by)}</b> ${n.what}${n.what === 'მოგნიშნა' ? ' კომენტარში' : ''}<time>${ago(n.t)}</time></span>
+      <span class="nb">${esc(n.task.title)}</span>${n.text ? `<span class="nx">${esc(n.text.slice(0, 120))}</span>` : ''}</button>`).join('')
+    : '<p class="none">როცა ვინმე მოგნიშნავს ან დავალებას მოგწერს, აქ გამოჩნდება.</p>');
+  document.body.appendChild(popEl);
+  const r = btn.getBoundingClientRect(), w = Math.min(360, innerWidth - 16);
+  popEl.style.width = w + 'px'; popEl.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + 'px'; popEl.style.top = (r.bottom + 6) + 'px';
+  ls.set(SEENKEY, String(Date.now())); paintBadge();
+  popEl.onclick = e => { const b = e.target.closest('[data-nopen]'); if(b){ closePop(); openPanel(b.dataset.nopen); } };
+}
+document.addEventListener('pointerdown', e => { if(popEl && !popEl.contains(e.target) && !e.target.closest('[data-tpick],[data-gmenu],#tkBell')) closePop(); }, true);
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ if(popEl) closePop(); else if(panelId && !$('#mpop')) closePanel(); } });
+$('#pTasks').addEventListener('scroll', () => { if(popEl && !popEl.classList.contains('k-group')) closePop(); }, {passive:true});
 addEventListener('resize', closePop);
+
 $('#pTasks').addEventListener('click', e => {
-  if(e.target.closest('#tkAdd')){ openTask(null); return; }
+  if(e.target.closest('#tkAdd')){ const f = $('#tkBody [data-tadd] input'); if(f){ f.scrollIntoView({block:'center', behavior:'smooth'}); f.focus({preventScroll:true}); } return; }
+  const bell = e.target.closest('#tkBell'); if(bell){ if(popEl && popEl.dataset.for === 'bell') closePop(); else openBell(bell); return; }
   const w = e.target.closest('[data-who]'); if(w){ tkWho = w.dataset.who; renderTasks(); return; }
-  if(e.target.closest('[data-tdone]')){ showDone = !showDone; renderTasks(); return; }
+  if(e.target.closest('[data-hidedone]')){ hideDone = !hideDone; renderTasks(); return; }
+  if(e.target.closest('[data-gadd]')){
+    const g = {id: 'g' + Date.now().toString(36), name: 'ახალი ჯგუფი', color: GCOL[GROUPS.length % GCOL.length]};
+    GROUPS.push(g); saveGroups().then(() => {}); renderTasks();
+    const b = $(`#tkBody [data-grp="${g.id}"] [data-gmenu]`); if(b) openGroupMenu(b, g);
+    return;
+  }
+  const sec = e.target.closest('[data-grp]'), g = sec && GROUPS.find(x => x.id === sec.dataset.grp);
+  if(g && e.target.closest('[data-gfold]')){ FOLD[g.id] = !FOLD[g.id]; ls.set(FOLDKEY, JSON.stringify(FOLD)); renderTasks(); return; }
+  if(g && e.target.closest('[data-gmenu]')){ if(popEl && popEl.dataset.for === 'g' + g.id) closePop(); else openGroupMenu(e.target.closest('[data-gmenu]'), g); return; }
   const row = e.target.closest('[data-task]'); if(!row) return;
   const t = TASKS.find(x => x.id === row.dataset.task); if(!t) return;
   const pk = e.target.closest('[data-tpick]');
-  if(pk){ if(popEl && popEl.dataset.for === t.id + pk.dataset.tpick){ closePop(); return; } openPop(pk, pk.dataset.tpick, t); popEl.dataset.for = t.id + pk.dataset.tpick; return; }
+  if(pk){ if(popEl && popEl.dataset.for === t.id + pk.dataset.tpick){ closePop(); return; } openPop(pk, pk.dataset.tpick, t); return; }
   if(e.target.closest('.tc-due')){ const i = row.querySelector('[data-tdue]'); try{ i.showPicker(); }catch(err){ i.focus(); } e.preventDefault(); return; }
-  if(e.target.closest('[data-topen]')) openTask(t.id);
+  if(e.target.closest('[data-topen]')) openPanel(t.id);
 });
+$('#pTasks').addEventListener('keydown', e => { const o = e.target.closest('.tname[data-topen]'); if(o && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); openPanel(o.closest('[data-task]').dataset.task); } });
+$('#pTasks').addEventListener('input', e => { if(e.target.id === 'tkQ'){ tkQ = e.target.value.trim(); renderTasks(); } });
 $('#pTasks').addEventListener('change', e => {
   const i = e.target.closest('[data-tdue]'); if(!i) return;
   editTask(i.closest('[data-task]').dataset.task, {due: i.value}, '');
@@ -713,48 +858,182 @@ $('#pTasks').addEventListener('submit', async e => {
   const f = e.target.closest('[data-tadd]'); if(!f) return;
   e.preventDefault();
   const title = f.title.value.trim(); if(!title) return;
-  const owner = tkWho !== 'all' ? tkWho : '';
-  TASKS.unshift({id: 'tmp' + Date.now(), created: Date.now(), title, notes: '', owner, status: 'todo', priority: '', due: '', updates: [], by: ''});
-  renderTasks(); $('#tkBody [data-tadd] input').focus();
-  await taskCall({action:'hubTaskAdd', task: {title, owner}}, 'დავალება დაემატა');
-  $('#tkBody [data-tadd] input')?.focus();
+  const grp = f.closest('[data-grp]').dataset.grp, owners = tkWho !== 'all' ? [tkWho] : ME ? [ME] : [];
+  const pos = Math.max(0, ...TASKS.filter(t => grpOf(t) === grp).map(t => t.pos || 0)) + 1000;
+  TASKS.push({id: 'tmp' + Date.now(), created: Date.now(), title, notes: '', owners, status: 'todo', priority: '', due: '', grp, pos, updates: [], by: ''});
+  renderTasks();
+  const again = $(`#tkBody [data-grp="${grp}"] [data-tadd] input`); if(again) again.focus();
+  await taskCall({action:'hubTaskAdd', task: {title, owners, grp, pos}}, '');
+  const a2 = $(`#tkBody [data-grp="${grp}"] [data-tadd] input`); if(a2 && document.activeElement !== a2 && !panelId) a2.focus();
 });
-const UPK = {add: () => 'დავალება შექმნა', status: u => `სტატუსი: ${stLabel(u.v)}`, owner: u => u.v ? `გადასცა: ${pname(u.v)}` : 'პასუხისმგებელი მოხსნა'};
-function openTask(id){
-  const t = id ? TASKS.find(x => x.id === id) : {title: '', notes: '', owner: tkWho !== 'all' ? tkWho : '', status: 'todo', priority: '', due: '', updates: []};
-  if(!t) return;
-  const can = !id || ROLE === 'team' || (ME && t.creator === ME);
-  const ups = (t.updates || []).slice().reverse();
-  shf.innerHTML = `<h3><span>${id ? 'დავალება' : 'ახალი დავალება'}</span><button class="hx" type="button" data-close aria-label="დახურვა">×</button></h3>
-    <label>რა უნდა გაკეთდეს<input name="title" maxlength="160" value="${esc(t.title)}" required autocomplete="off"></label>
-    <div class="two"><label>ვისზეა<select name="owner">${opts([['', 'არავის'], ...PEOPLE.map(p => [p.email, p.name])], t.owner)}</select></label>
-    <label>ვადა<input type="date" name="due" value="${esc(t.due)}"></label></div>
-    <div class="two"><label>სტატუსი<select name="status">${opts(TST.map(s => [s.id, s.label]), t.status)}</select></label>
-    <label>პრიორიტეტი<select name="priority">${opts(TPR.map(s => [s.id, s.id ? s.label : 'არ არის']), t.priority || '')}</select></label></div>
-    <label>დეტალები<textarea name="notes" maxlength="2000" placeholder="ბმული, ფაილი, რას უნდა მიაქციოს ყურადღება">${esc(t.notes)}</textarea></label>
-    ${id ? `<div class="tups"><b>კომენტარები და ისტორია</b>
-      <div class="tnote"><textarea data-tnote maxlength="1500" placeholder="დაწერე კომენტარი ან განახლება"></textarea><button class="btn sm" type="button" data-tsend>გაგზავნა</button></div>
-      <ul>${ups.map(u => u.k === 'note' ? `<li class="n"><div class="uh">${avHTML((PEOPLE.find(p => p.name === u.by) || {}).email || '', 'sm')}<b>${esc(u.by)}</b><time>${fmt(u.t)}</time></div><p>${esc(u.v)}</p></li>`
-        : `<li class="s">${esc(u.by)}: ${esc((UPK[u.k] || (() => ''))(u))}, ${fmt(u.t)}</li>`).join('')}</ul></div>` : ''}
-    <div class="row">${id && can ? '<button class="btn" type="button" data-tdel>წაშლა</button><span style="flex:1"></span>' : ''}<button class="btn" type="button" data-close>დახურვა</button><button class="btn primary" type="submit">${id ? 'შენახვა' : 'დავალების დამატება'}</button></div>`;
-  const send = shf.querySelector('[data-tsend]');
-  if(send) send.onclick = async () => {
-    const ta = shf.querySelector('[data-tnote]'), text = ta.value.trim(); if(!text) return;
-    send.disabled = true;
-    if(await taskCall({action:'hubTaskNote', id, text}, 'კომენტარი დაემატა')) openTask(id); else send.disabled = false;
+
+/* drag a row by its handle: up, down, or into another group */
+$('#pTasks').addEventListener('pointerdown', e => {
+  const grip = e.target.closest('[data-grip]'); if(!grip || e.button > 0) return;
+  const row = grip.closest('.trow'), t = TASKS.find(x => x.id === row.dataset.task); if(!t || t.id.startsWith('tmp')) return;
+  e.preventDefault(); closePop();
+  const pane = $('#pTasks'), r = row.getBoundingClientRect(), dy = e.clientY - r.top;
+  const ph = document.createElement('div'); ph.className = 'trow ph'; ph.style.height = r.height + 'px';
+  row.after(ph);
+  Object.assign(row.style, {position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', zIndex: 80});
+  row.classList.add('lift'); document.body.classList.add('tdragging'); dragging = true;
+  let lastY = e.clientY, raf = 0;
+  const place = y => {
+    row.style.top = (y - dy) + 'px';
+    row.style.visibility = 'hidden';
+    const el = document.elementFromPoint(r.left + 40, y);
+    row.style.visibility = '';
+    const over = el && el.closest('.trow:not(.ph):not(.lift)'), sec = el && el.closest('[data-grp]');
+    if(over){ const b = over.getBoundingClientRect(); y < b.top + b.height / 2 ? over.before(ph) : over.after(ph); }
+    else if(sec && !sec.classList.contains('fold')){
+      const rows = sec.querySelector('.trows'), list = rows && [...rows.querySelectorAll('.trow:not(.ph):not(.lift)')];
+      if(rows && (!list.length || y > list[list.length - 1].getBoundingClientRect().bottom)) rows.appendChild(ph);
+      else if(rows && y < list[0].getBoundingClientRect().top) rows.prepend(ph);
+    }
   };
-  const del = shf.querySelector('[data-tdel]');
-  if(del) del.onclick = async () => { if(!confirm('წავშალო ეს დავალება?')) return; if(await taskCall({action:'hubTaskDelete', id}, 'დავალება წაიშალა')) closeSh(); };
-  shf.onsubmit = async e => {
-    e.preventDefault();
-    const v = Object.fromEntries(new FormData(shf)); v.title = v.title.trim();
-    if(!v.title){ toast('ჩაწერეთ, რა უნდა გაკეთდეს.'); return; }
-    const patch = {}; ['title','owner','due','status','priority','notes'].forEach(k => { if((v[k] || '') !== (t[k] || '')) patch[k] = v[k]; });
-    shf.querySelector('[type=submit]').disabled = true;
-    const ok = id ? (Object.keys(patch).length ? await taskCall({action:'hubTaskEdit', id, task: patch}, 'შენახულია') : true) : await taskCall({action:'hubTaskAdd', task: v}, 'დავალება დაემატა');
-    if(ok) closeSh(); else shf.querySelector('[type=submit]').disabled = false;
+  const tick = () => {
+    const pr = pane.getBoundingClientRect();
+    if(lastY < pr.top + 70) pane.scrollTop -= 12; else if(lastY > pr.bottom - 70) pane.scrollTop += 12;
+    place(lastY); raf = requestAnimationFrame(tick);
   };
-  sh.hidden = false; if(!id) setTimeout(() => shf.querySelector('input').focus({preventScroll:true}), 60);
+  raf = requestAnimationFrame(tick);
+  const move = ev => { lastY = ev.clientY; };
+  const up = () => {
+    cancelAnimationFrame(raf);
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+    document.body.classList.remove('tdragging'); dragging = false;
+    const sec = ph.closest('[data-grp]'), grp = sec ? sec.dataset.grp : grpOf(t);
+    const pv = ph.previousElementSibling, nx = ph.nextElementSibling;
+    const P = el => { const x = el && el.dataset.task && TASKS.find(z => z.id === el.dataset.task); return x ? x.pos || 0 : null; };
+    const a = P(pv), b = P(nx);
+    const pos = a != null && b != null ? (a + b) / 2 : a != null ? a + 1000 : b != null ? b - 1000 : Date.now();
+    ph.remove(); row.removeAttribute('style'); row.classList.remove('lift');
+    if(grp === grpOf(t) && pos === t.pos){ renderTasks(); return; }
+    editTask(t.id, {grp, pos}, grp !== grpOf(t) ? `გადავიდა: ${(GROUPS.find(g => g.id === grp) || {}).name}` : '');
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+});
+
+/* ---------- task panel: description, comments with @mentions, history (monday's item card) ---------- */
+const panel = document.createElement('aside');
+panel.className = 'tpanel'; panel.id = 'tkPanel'; panel.hidden = true; panel.setAttribute('aria-label', 'დავალება');
+document.body.appendChild(panel);
+let panelTab = 'notes';
+function closePanel(){ panel.hidden = true; panel.innerHTML = ''; panelId = null; document.querySelectorAll('.trow.open').forEach(r => r.classList.remove('open')); }
+function openPanel(id){
+  const t = TASKS.find(x => x.id === id); if(!t || id.startsWith('tmp')) return;
+  closePop(); panelId = id; panelTab = 'notes';
+  panel.innerHTML = `<div class="tp-scrim" data-pclose></div><div class="tp-card" role="dialog" aria-modal="true">
+    <header class="tp-h"><button type="button" class="icon-btn" data-pclose aria-label="დახურვა">${TI.x}</button>
+      <textarea class="tp-title" rows="1" maxlength="200" aria-label="დავალების სახელი"></textarea></header>
+    <div class="tp-meta"></div>
+    <div class="tp-sec"><b>აღწერა</b><textarea class="tp-desc" maxlength="5000" placeholder="რა უნდა გაკეთდეს, ბმულები, დეტალები"></textarea><small class="tp-saved" hidden>შენახულია</small></div>
+    <div class="tp-tabs" role="tablist"><button type="button" role="tab" data-ptab="notes"></button><button type="button" role="tab" data-ptab="log">ისტორია</button></div>
+    <div class="tp-body"></div>
+  </div>`;
+  const ti = panel.querySelector('.tp-title'), de = panel.querySelector('.tp-desc');
+  ti.value = t.title; de.value = t.notes;
+  const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+  [ti, de].forEach(el => { el.addEventListener('input', () => grow(el)); });
+  ti.onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); ti.blur(); } };
+  ti.onblur = () => { const v = ti.value.trim(); const x = TASKS.find(z => z.id === panelId); if(x && v && v !== x.title) editTask(x.id, {title: v}); else if(x && !v) ti.value = x.title; };
+  de.onblur = async () => { const x = TASKS.find(z => z.id === panelId); if(x && de.value !== x.notes){ const ok = await editTask(x.id, {notes: de.value}); const s = panel.querySelector('.tp-saved'); if(ok && s){ s.hidden = false; setTimeout(() => s.hidden = true, 1800); } } };
+  panel.hidden = false;
+  paintPanel(); requestAnimationFrame(() => { grow(ti); grow(de); });
+  document.querySelectorAll('.trow').forEach(r => r.classList.toggle('open', r.dataset.task === id));
+}
+function paintPanel(){
+  const t = TASKS.find(x => x.id === panelId); if(!t){ closePanel(); return; }
+  const ti = panel.querySelector('.tp-title'), de = panel.querySelector('.tp-desc');
+  if(document.activeElement !== ti && ti.value !== t.title) ti.value = t.title;
+  if(document.activeElement !== de && de.value !== t.notes) de.value = t.notes;
+  const g = GROUPS.find(x => x.id === grpOf(t)) || {};
+  panel.querySelector('.tp-meta').innerHTML = `
+    <div class="pm-row"><span>ვისზეა</span><button type="button" class="pv" data-ppick="owners">${avsHTML(t.owners || [])}<em>${esc((t.owners || []).map(pname).join(', ') || 'არავის')}</em></button></div>
+    <div class="pm-row"><span>სტატუსი</span><button type="button" class="pv pill st-${esc(t.status)}" data-ppick="status">${stLabel(t.status)}</button></div>
+    <div class="pm-row"><span>პრიორიტეტი</span><button type="button" class="pv pill pr-${esc(t.priority || 'none')}" data-ppick="priority">${prLabel(t.priority) || 'არ არის'}</button></div>
+    <div class="pm-row"><span>ვადა</span><label class="pv">${dueHTML(t)}<input type="date" value="${esc(t.due)}" data-pdue aria-label="ვადა"></label></div>
+    <div class="pm-row"><span>ჯგუფი</span><label class="pv"><i class="gdot" style="--g:${esc(g.color || '#999')}"></i><select data-pgrp aria-label="ჯგუფი">${GROUPS.map(x => `<option value="${esc(x.id)}" ${x.id === g.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label></div>`;
+  const N = notesOf(t);
+  panel.querySelector('[data-ptab="notes"]').textContent = `კომენტარები${N.length ? ' (' + N.length + ')' : ''}`;
+  panel.querySelectorAll('[data-ptab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.ptab === panelTab)));
+  const body = panel.querySelector('.tp-body');
+  if(panelTab === 'log'){
+    const LBL = {add: () => 'შექმნა დავალება', status: u => `სტატუსი შეცვალა: ${stLabel(u.v)}`, owners: u => (u.v || []).length ? `ვისზეა: ${(u.v || []).map(pname).join(', ')}` : 'პასუხისმგებელი მოხსნა', note: () => 'დაწერა კომენტარი'};
+    body.innerHTML = `<ul class="tp-log">${(t.updates || []).slice().reverse().map(u => `<li>${avHTML(u.be || '', 'sm')}<span><b>${esc(u.by)}</b> ${esc((LBL[u.k] || (() => ''))(u))}</span><time>${fmt(u.t)}</time></li>`).join('')}</ul>`;
+    return;
+  }
+  const keep = body.querySelector('.tp-comp textarea'), draft = keep ? keep.value : '', focused = keep && document.activeElement === keep;
+  body.innerHTML = `<div class="tp-comp"><textarea maxlength="3000" placeholder="დაწერე კომენტარი. ადამიანის მოსანიშნად აკრიფე @" aria-label="კომენტარი"></textarea>
+      <div class="tp-cr"><small>@ აკრიფე და აირჩიე, ვინ მონიშნო</small><button type="button" class="btn sm primary" data-psend>გაგზავნა</button></div></div>
+    ${N.length ? `<ul class="tp-notes">${N.slice().reverse().map(u => `<li>
+      <div class="uh">${avHTML(u.be || (PEOPLE.find(p => p.name === u.by) || {}).email || '', 'sm')}<b>${esc(u.by)}</b><time title="${fmt(u.t)}">${ago(u.t)}</time>
+      ${u.i && (u.be === ME || ROLE === 'team') ? `<button type="button" class="ndel" data-ndel="${esc(u.i)}" aria-label="კომენტარის წაშლა">${TI.trash}</button>` : ''}</div>
+      <p>${richText(u.v)}</p></li>`).join('')}</ul>` : '<p class="tp-empty">კომენტარი ჯერ არ არის. დაწერე პირველი და მონიშნე ადამიანი @-ით.</p>'}
+    <div class="tp-foot"><span>შექმნა ${esc(t.by || '')}, ${fmt(t.created)}</span><button type="button" class="btn sm" data-pdel>${TI.trash}დავალების წაშლა</button></div>`;
+  const ta = body.querySelector('.tp-comp textarea');
+  ta.value = draft; if(focused){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  wireMentions(ta);
+}
+async function sendNote(){
+  const ta = panel.querySelector('.tp-comp textarea'), text = ta.value.trim(); if(!text || !panelId) return;
+  const b = panel.querySelector('[data-psend]'); b.disabled = true;
+  const t = TASKS.find(x => x.id === panelId);
+  t.updates = [...(t.updates || []), {k: 'note', t: Date.now(), by: pname(ME) || 'მე', be: ME, v: text}];
+  ta.value = ''; paintPanel(); render();
+  if(!await taskCall({action:'hubTaskNote', id: panelId, text, m: mentionsIn(text)}, mentionsIn(text).filter(e => e !== ME).length ? 'კომენტარი გაიგზავნა, მონიშნულები ნახავენ' : '')){
+    const t2 = panel.querySelector('.tp-comp textarea'); if(t2) t2.value = text;
+  }
+}
+panel.addEventListener('click', async e => {
+  if(e.target.closest('[data-pclose]')){ closePanel(); return; }
+  const tb = e.target.closest('[data-ptab]'); if(tb){ panelTab = tb.dataset.ptab; paintPanel(); return; }
+  const t = TASKS.find(x => x.id === panelId); if(!t) return;
+  const pk = e.target.closest('[data-ppick]');
+  if(pk){ if(popEl && popEl.dataset.for === t.id + pk.dataset.ppick){ closePop(); return; } openPop(pk, pk.dataset.ppick, t); popEl.dataset.for = t.id + pk.dataset.ppick; return; }
+  if(e.target.closest('label.pv') && e.target.closest('.pm-row') && panel.querySelector('[data-pdue]') && e.target.closest('.pm-row').contains(panel.querySelector('[data-pdue]'))){ const i = panel.querySelector('[data-pdue]'); try{ i.showPicker(); }catch(err){ i.focus(); } e.preventDefault(); return; }
+  if(e.target.closest('[data-psend]')){ sendNote(); return; }
+  const nd = e.target.closest('[data-ndel]');
+  if(nd){ if(!confirm('წავშალო ეს კომენტარი?')) return; t.updates = t.updates.filter(u => u.i !== nd.dataset.ndel); paintPanel(); await taskCall({action:'hubTaskNoteDel', id: t.id, i: nd.dataset.ndel}, 'კომენტარი წაიშალა'); return; }
+  if(e.target.closest('[data-pdel]')){ if(!confirm(`წავშალო დავალება „${t.title}“?`)) return; const id = t.id; closePanel(); TASKS = TASKS.filter(x => x.id !== id); render(); await taskCall({action:'hubTaskDelete', id}, 'დავალება წაიშალა'); }
+});
+panel.addEventListener('change', e => {
+  if(e.target.matches('[data-pdue]')) editTask(panelId, {due: e.target.value});
+  if(e.target.matches('[data-pgrp]')){ const grp = e.target.value; editTask(panelId, {grp, pos: Math.max(0, ...TASKS.filter(t => grpOf(t) === grp).map(t => t.pos || 0)) + 1000}, `გადავიდა: ${(GROUPS.find(g => g.id === grp) || {}).name}`); }
+});
+panel.addEventListener('keydown', e => { if(e.target.matches('.tp-comp textarea') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); sendNote(); } });
+
+/* @mention picker under the comment box */
+function wireMentions(ta){
+  let box = null, list = [], at = -1, sel = 0;
+  const close = () => { if(box){ box.remove(); box = null; } };
+  const pick = p => {
+    const v = ta.value, end = ta.selectionStart;
+    ta.value = v.slice(0, at) + '@' + p.name + ' ' + v.slice(end);
+    const c = at + p.name.length + 2; ta.setSelectionRange(c, c); ta.focus(); close();
+  };
+  const paint = () => {
+    if(!box){ box = document.createElement('div'); box.className = 'tpop k-mention'; box.id = 'mpop'; document.body.appendChild(box);
+      box.onpointerdown = e => { e.preventDefault(); const b = e.target.closest('[data-mi]'); if(b) pick(list[+b.dataset.mi]); }; }
+    box.innerHTML = list.map((p, i) => `<button type="button" data-mi="${i}" aria-selected="${i === sel}">${avHTML(p.email)}<span>${esc(p.name)}</span></button>`).join('');
+    const r = ta.getBoundingClientRect(); box.style.width = '220px'; box.style.left = (r.left + 8) + 'px';
+    box.style.top = Math.min(r.bottom + 4, innerHeight - box.offsetHeight - 8) + 'px';
+  };
+  ta.addEventListener('input', () => {
+    const before = ta.value.slice(0, ta.selectionStart), m = before.match(/(^|\s)@([^\s@]*)$/);
+    if(!m){ close(); return; }
+    at = before.length - m[2].length - 1;
+    list = PEOPLE.filter(p => p.name.toLowerCase().startsWith(m[2].toLowerCase()) || p.email.startsWith(m[2].toLowerCase()));
+    if(!list.length){ close(); return; }
+    sel = 0; paint();
+  });
+  ta.addEventListener('keydown', e => {
+    if(!box) return;
+    if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; paint(); }
+    else if(e.key === 'Enter' || e.key === 'Tab'){ e.preventDefault(); e.stopPropagation(); pick(list[sel]); }
+    else if(e.key === 'Escape'){ e.stopPropagation(); close(); }
+  });
+  ta.addEventListener('blur', () => setTimeout(close, 150));
 }
 
 /* ---------- analytics ---------- */
@@ -819,12 +1098,13 @@ async function boot(){
     catch(e){ TABS = {content:true, patients:false, analytics:false, tasks:false}; }
   }
   setupNav();
-  setInterval(() => { if(document.visibilityState === 'visible' && cur !== 'content' && loaded && !busy && sh.hidden && !popEl) loadHub(true); }, 30000);
+  if(cur === 'content' && !DEMO && (session() || pin() || teamKey())) loadHub(true);   // learn early whether this person sees the task board
+  setInterval(() => { if(document.visibilityState === 'visible' && cur !== 'content' && loaded && !busy && sh.hidden && !popEl && !panelId && !dragging) loadHub(true); }, 30000);
 }
 boot();
 
 /* ---------- demo data (?demo=1) ---------- */
-let DEMO_LEADS = null, DEMO_TASKS = null;
+let DEMO_LEADS = null, DEMO_TASKS = null, DEMO_GROUPS = null;
 function demoCall(body){
   if(!DEMO_LEADS){
     const now = Date.now(), H = 3600e3, D = 24 * H;
@@ -851,23 +1131,26 @@ function demoCall(body){
   const d = new Date(), m = k => { const x = new Date(d.getFullYear(), d.getMonth() - k, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}`; };
   if(!DEMO_TASKS){
     const now = Date.now(), D = 864e5, day = k => { const x = new Date(now + k * D); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
-    const mk = (i, title, owner, status, priority, due, notes = '', ups = []) => ({id: 'T' + i, created: now - i * D, title, notes, owner, status, priority, due, by: 'გია', creator: 'gia@demo', updated: now - i * 3600e3, updates: [{t: now - i * D, by: 'გია', k: 'add'}, ...ups]});
+    const mk = (i, title, owners, status, priority, due, grp, notes = '', ups = []) => ({id: 'T' + i, created: now - i * D, title, notes, owners, status, priority, due, grp, pos: i * 1000, by: 'გია', creator: 'gia@demo', updated: now - i * 3600e3, updates: [{t: now - i * D, by: 'გია', be: 'gia@demo', k: 'add'}, ...ups]});
     DEMO_TASKS = [
-      mk(1, 'ნოემბრის ფოტოები: ექიმების პორტრეტები', 'tamari@demo', 'doing', 'high', day(1), 'თეთრ ფონზე, 4:5.', [{t: now - 2 * 3600e3, by: 'თამარი', k: 'note', v: 'ხვალ 12-ზე გადავიღებ.'}]),
-      mk(2, 'პაციენტის ვიდეო-შეფასება იმპლანტზე', 'tamari@demo', 'todo', 'mid', day(4)),
-      mk(3, 'ფასების ცხრილი საიტისთვის', 'mzia@demo', 'stuck', 'high', day(-1), 'ახალი ფასები ჯერ არ გვაქვს.'),
-      mk(4, 'Facebook-ის რეკლამის ტექსტების დადასტურება', 'gia@demo', 'todo', 'low', day(6)),
-      mk(5, 'Instagram-ის ბიო განახლება', 'gia@demo', 'done', 'low', day(-3)),
+      mk(1, 'ნოემბრის ფოტოები: ექიმების პორტრეტები', ['tamari@demo'], 'doing', 'high', day(1), 'g1', 'თეთრ ფონზე, 4:5. ორი ექიმი, თითოეულს 3 კადრი.', [{i: 'n1', t: now - 2 * 3600e3, by: 'თამარი', be: 'tamari@demo', k: 'note', v: 'ხვალ 12-ზე გადავიღებ. @გია ფონი შენ მოიტან?', m: ['gia@demo']}]),
+      mk(2, 'პაციენტის ვიდეო-შეფასება იმპლანტზე', ['tamari@demo', 'gia@demo'], 'todo', 'mid', day(4), 'g1'),
+      mk(3, 'ფასების ცხრილი საიტისთვის', ['gia@demo'], 'stuck', 'high', day(-1), 'g1', 'ახალი ფასები ჯერ არ გვაქვს.'),
+      mk(4, 'Facebook-ის რეკლამის ტექსტების დადასტურება', [], 'todo', 'low', day(6), 'g2', '', [{i: 'n2', t: now - 40 * 60e3, by: 'გია', be: 'gia@demo', k: 'note', v: '@თამარი ნახე, რომელი ვარიანტი ჯობია.', m: ['tamari@demo']}]),
+      mk(5, 'Instagram-ის ბიო განახლება', ['gia@demo'], 'done', 'low', day(-3), 'g2'),
     ];
+    DEMO_GROUPS = [{id: 'g1', name: 'ამ კვირაში', color: '#579BFC'}, {id: 'g2', name: 'შემდეგში', color: '#A25DDC'}];
   }
-  const res = () => ({role: 'clinic', tasks: JSON.parse(JSON.stringify(DEMO_TASKS)), people: [{email: 'gia@demo', name: 'გია', role: 'team'}, {email: 'mzia@demo', name: 'მზია', role: 'clinic'}, {email: 'tamari@demo', name: 'თამარი', role: 'clinic'}], leads: JSON.parse(JSON.stringify(DEMO_LEADS)), settings: {spend: {[m(0)]: {facebook: 240, google: 120, sms: 35}, [m(1)]: {facebook: 200, google: 100}}}});
+  const res = () => ({role: 'clinic', canTasks: true, groups: JSON.parse(JSON.stringify(DEMO_GROUPS)), tasks: JSON.parse(JSON.stringify(DEMO_TASKS)), people: [{email: 'gia@demo', name: 'გია'}, {email: 'tamari@demo', name: 'თამარი'}], leads: JSON.parse(JSON.stringify(DEMO_LEADS)), settings: {spend: {[m(0)]: {facebook: 240, google: 120, sms: 35}, [m(1)]: {facebook: 200, google: 100}}}});
   const L = id => DEMO_LEADS.find(l => l.id === id);
   if(body.action === 'hubLeadAdd') DEMO_LEADS.unshift({id: 'D' + Date.now(), created: Date.now(), ...body.lead, source: '', stage: 'new', updated: Date.now(), history: [{t: Date.now(), stage: 'new', by: body.by}]});
   if(body.action === 'hubLeadMove'){ const l = L(body.id); l.stage = body.stage; l.history.push({t: Date.now(), stage: body.stage, by: body.by}); }
   if(body.action === 'hubLeadEdit') Object.assign(L(body.id), body.lead);
-  if(body.action === 'hubTaskAdd') DEMO_TASKS.unshift({id: 'T' + Date.now(), created: Date.now(), notes: '', owner: '', status: 'todo', priority: '', due: '', ...body.task, by: 'თამარი', creator: 'tamari@demo', updated: Date.now(), updates: [{t: Date.now(), by: 'თამარი', k: 'add'}]});
+  if(body.action === 'hubTaskAdd') DEMO_TASKS.push({id: 'T' + Date.now(), created: Date.now(), notes: '', owners: [], status: 'todo', priority: '', due: '', ...body.task, by: 'თამარი', creator: 'tamari@demo', updated: Date.now(), updates: [{t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'add'}]});
   if(body.action === 'hubTaskEdit') Object.assign(DEMO_TASKS.find(t => t.id === body.id), body.task, {updated: Date.now()});
-  if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({t: Date.now(), by: 'თამარი', k: 'note', v: body.text});
+  if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({i: 'n' + Date.now(), t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'note', v: body.text, m: body.m});
+  if(body.action === 'hubTaskNoteDel'){ const t = DEMO_TASKS.find(t => t.id === body.id); t.updates = t.updates.filter(u => u.i !== body.i); }
+  if(body.action === 'hubGroupSave') DEMO_GROUPS = body.groups;
   if(body.action === 'hubTaskDelete') DEMO_TASKS.splice(DEMO_TASKS.findIndex(t => t.id === body.id), 1);
   return new Promise(r => setTimeout(() => r(res()), 250));
 }
