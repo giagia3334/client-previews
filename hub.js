@@ -10,6 +10,7 @@ const DEMO = Q.get('demo') === '1';
 // a link to one post (?post=ID): keep the page covered until that post's window is open
 if(Q.get('post')) document.documentElement.classList.add('deeplink');
 const undeep = () => document.documentElement.classList.remove('deeplink');
+const CACHEKEY = 'hub_cache_' + CLIENT, PUBKEY = 'hub_pub_' + CLIENT;
 const PINKEY = 'hub_pin_' + CLIENT, PLATKEY = 'hub_plat_' + CLIENT, SESKEY = 'hub_ses_' + CLIENT;
 const STAGES = [
   {id:'new',    label:'ახალი პაციენტი', short:'ახალი',    next:'booked', nextLabel:'დაიჯავშნა'},
@@ -432,9 +433,10 @@ async function loadHub(silent, idToken){
     const r = await call(idToken ? {action:'hubLoad', idToken} : {action:'hubLoad', pin: pin()});
     if(r.session) ls.set(SESKEY, r.session);
     ME = r.me || ''; if(DEMO) ME = 'tamari@demo'; take(r); loaded = true; render();
+    if(!DEMO){ const c = Object.assign({}, r); delete c.session; try{ ls.set(CACHEKEY, JSON.stringify({t: Date.now(), me: ME, r: c})); }catch(err){} }
   }catch(e){
     const msg = authError(e, silent);
-    if(msg !== null){ loaded = false; render(msg); }
+    if(msg !== null){ ls.set(CACHEKEY, ''); loaded = false; render(msg); }
     else if(!silent) toast('კავშირი ვერ დამყარდა. შეამოწმეთ ინტერნეტი და სცადეთ თავიდან.');
   }
 }
@@ -455,7 +457,7 @@ function drawGoogle(){
   });
 }
 function signOut(){
-  ls.set(SESKEY, ''); ls.set(PINKEY, ''); ME = '';
+  ls.set(SESKEY, ''); ls.set(PINKEY, ''); ls.set(CACHEKEY, ''); ME = '';
   try{ google.accounts.id.disableAutoSelect(); }catch(e){}
   loaded = false; render();
 }
@@ -1151,13 +1153,22 @@ async function boot(){
   // the Instagram data arrives a moment later; draw the other platforms (and open a linked post) as soon as it is there
   const wait = setInterval(() => { if(ready()){ clearInterval(wait); renderPlat(); openFromLink(); } }, 40);
   setTimeout(undeep, 8000);   // never leave the page covered if something fails
+  /* open instantly: draw from what this device saw last time, then refresh from the server in the background */
+  const signedIn = () => !!(session() || pin() || teamKey());
+  const pubFrom = r => { TABS = Object.assign({content:true, patients:false, analytics:false, tasks:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; };
+  let pub = null, cache = null;
+  try{ pub = JSON.parse(ls.get(PUBKEY) || 'null'); }catch(e){}
+  try{ cache = JSON.parse(ls.get(CACHEKEY) || 'null'); }catch(e){}
   if(DEMO) TABS = {content:true, patients:true, analytics:true, tasks:true};
   else if(CFGH.api){
-    try{ const r = await api.post(CFGH, {action:'hubPublic'}); TABS = Object.assign({content:true, patients:false, analytics:false, tasks:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; }
-    catch(e){ TABS = {content:true, patients:false, analytics:false, tasks:false}; }
+    const fresh = api.post(CFGH, {action:'hubPublic'}).then(r => { pubFrom(r); try{ ls.set(PUBKEY, JSON.stringify(r)); }catch(e){} return true; }).catch(() => false);
+    if(pub) pubFrom(pub);
+    else if(!(await fresh)) TABS = {content:true, patients:false, analytics:false, tasks:false};
+    fresh.then(ok => { if(ok && pub){ navVis(); if(!tabOk(cur)) showTab(cur); } });
   }
+  if(cache && cache.r && signedIn() && !DEMO){ ME = cache.me || ''; take(cache.r); loaded = true; }
   setupNav();
-  if(cur === 'content' && !DEMO && (session() || pin() || teamKey())) loadHub(true);   // learn early whether this person sees the task board
+  if(!DEMO && signedIn()) loadHub(true);   // fresh data (and whether this person sees the task board)
   setInterval(() => { if(document.visibilityState === 'visible' && cur !== 'content' && loaded && !busy && sh.hidden && !popEl && !panelId && !dragging) loadHub(true); }, 30000);
 }
 boot();
