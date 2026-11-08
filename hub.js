@@ -55,7 +55,7 @@ let CFGH = null, TABS = {content:true, patients:false, analytics:false, tasks:fa
 let LEADS = [], SPEND = {}, ROLE = '', loaded = false, busy = 0, pickStage = 'new', showLost = false, period = 'month';
 const pin = () => ls.get(PINKEY) || '';
 const session = () => ls.get(SESKEY) || '';
-let GCLIENT = '', ME = '', usePin = false;
+let GCLIENT = '', ME = '', usePin = false, WANT_BOT = location.hash === '#bot';
 const teamKey = () => ls.get('igs_key_' + CLIENT) || '';
 const me = () => (ls.get('igp_name') || '').trim();
 const money = v => (Math.round(v * 10) / 10).toLocaleString('ka-GE', {maximumFractionDigits: 1}) + ' ₾';
@@ -474,6 +474,7 @@ function take(r){
   document.querySelectorAll('[data-tab="patients"] .n').forEach(d => { d.textContent = n; d.hidden = !n; });
   CAN_TASKS = !!r.canTasks; LINKS = r.links || []; TASKS = r.tasks || []; PEOPLE = r.people || []; GROUPS = r.groups || [];
   loaded = true; navVis(); paintBadge();
+  if(WANT_BOT && cur !== 'bot' && tabOk('bot')){ WANT_BOT = false; setTimeout(() => showTab('bot')); }
   if(cur === 'tasks' && !CAN_TASKS) showTab('content');
   if(panelId) paintPanel();
 }
