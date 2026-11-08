@@ -32,6 +32,7 @@ const I = {
   patients: SV('<circle cx="9" cy="8.5" r="3.5"/><path d="M2.8 19.5a6.3 6.3 0 0 1 12.4 0"/><path d="M16 5.2a3.4 3.4 0 0 1 0 6.6M18 14.2a6 6 0 0 1 3.2 5.3"/>'),
   analytics: SV('<path d="M4 20h16"/><path d="M7 16.5v-5M12 16.5V7M17 16.5v-8"/>'),
   tasks: SV('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12.3 2.6 2.6L16.2 9"/>'),
+  bot: SV('<path d="M5 6.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4 3v-3H5A1.5 1.5 0 0 1 3.5 16V8A1.5 1.5 0 0 1 5 6.5Z"/><path d="M9 12h.01M15 12h.01M12 3.5v3"/>'),
   note: SV('<path d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/>', 16),
   moon: SV('<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', 18),
   sun: SV('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>', 18),
@@ -69,7 +70,7 @@ const isDark = () => document.body.classList.contains('dark');
 /* ---------- shell ---------- */
 const app = $('#app'), stage = document.querySelector('.stage');
 function navItems(cls){
-  return [['content','კონტენტი'],['patients','პაციენტები'],['tasks','დავალებები'],['analytics','ანალიტიკა']]
+  return [['content','კონტენტი'],['patients','პაციენტები'],['tasks','დავალებები'],['bot','ბოტი'],['analytics','ანალიტიკა']]
     .map(([k, t]) => `<button type="button" class="${cls}" data-tab="${k}">${I[k]}<span>${t}</span>${k === 'patients' || k === 'tasks' ? '<span class="n" hidden></span>' : ''}</button>`).join('');
 }
 const shell = document.createElement('div');
@@ -105,6 +106,10 @@ shell.innerHTML = `
       <div class="body" id="tkBody"></div>
       <div class="qlinks" id="tkLinks" hidden></div>
     </section>
+    <section class="pane" id="pBot" hidden>
+      <div class="head"><div class="ttl"><h1>ბოტი</h1><p>სატესტო ჩატი: დაწერეთ როგორც პაციენტი და შეაფასეთ ბოტის პასუხები 👍/👎. აქედან არაფერი ეგზავნება პაციენტებს.</p></div><a class="btn" href="https://likedent-bot.pages.dev/test" target="_blank" rel="noopener">ცალკე ფანჯარაში</a></div>
+      <div class="body botbody"></div>
+    </section>
     <section class="pane" id="pAnalytics" hidden>
       <div class="head"><div class="ttl"><h1>ანალიტიკა</h1><p>რამდენი პაციენტი მოვიდა, საიდან და რა დაჯდა თითო.</p></div>
         <div class="seg" role="group" aria-label="პერიოდი" id="perSeg"><span class="thumb"></span>${[['month','ეს თვე'],['prev','წინა თვე'],['q','3 თვე'],['all','სულ']].map(([k, t]) => `<button type="button" data-per="${k}" aria-pressed="false">${t}</button>`).join('')}</div></div>
@@ -121,7 +126,7 @@ document.body.insertAdjacentHTML('beforeend', `
 document.body.classList.add('hubbed');
 shell.querySelector('.plat[data-plat="ig"]').appendChild(stage);
 
-const panes = {content: $('#pContent'), patients: $('#pPatients'), tasks: $('#pTasks'), analytics: $('#pAnalytics')};
+const panes = {content: $('#pContent'), patients: $('#pPatients'), tasks: $('#pTasks'), bot: $('#pBot'), analytics: $('#pAnalytics')};
 function paintTheme(){ document.querySelectorAll('[data-theme]').forEach(b => b.innerHTML = isDark() ? I.sun : I.moon); }
 document.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => { $('#themeBtn').click(); paintTheme(); });
 $('#themeBtn').addEventListener('click', () => setTimeout(paintTheme));
@@ -143,13 +148,14 @@ document.querySelectorAll('.seg button').forEach(b => segRO.observe(b));
 if(document.fonts) document.fonts.ready.then(() => document.querySelectorAll('.seg').forEach(moveThumb));
 
 function showTab(t){
-  if(!tabOk(t)) t = ['content','patients','tasks','analytics'].find(tabOk) || 'content';
+  if(!tabOk(t)) t = ['content','patients','tasks','bot','analytics'].find(tabOk) || 'content';
   cur = t;
   document.querySelectorAll('[data-tab]').forEach(b => b.dataset.tab === t ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'));
   Object.entries(panes).forEach(([k, el]) => el.hidden = k !== t);
   if(t !== 'content') pauseIg();
   placeOverlays();
   if(t === 'content') showPlat(plat);
+  else if(t === 'bot') botFrame();
   else if(!loaded) loadHub(); else render();
   try{ history.replaceState(null, '', location.pathname + location.search + (t === 'content' ? '' : '#' + t)); }catch(e){}
 }
@@ -686,7 +692,13 @@ function paintBadge(){
   document.querySelectorAll('[data-tab="tasks"] .n').forEach(d => { d.textContent = n; d.hidden = !n; });
   const b = $('#tkBell'); if(b){ b.querySelector('i').textContent = n; b.querySelector('i').hidden = !n; }
 }
-function tabOk(t){ return !!TABS[t] && (t !== 'tasks' || !loaded || CAN_TASKS); }
+function tabOk(t){ if(t === 'bot') return loaded && CAN_TASKS; return !!TABS[t] && (t !== 'tasks' || !loaded || CAN_TASKS); }
+/* bot test console: same people as the task board (Gia, Tamari); the bot site checks the Google email again on its own */
+function botFrame(){
+  const b = document.querySelector('#pBot .botbody');
+  if(b.firstChild) return;
+  b.innerHTML = '<iframe src="https://likedent-bot.pages.dev/test" title="Likedent ბოტი" allow="identity-credentials-get; clipboard-write" referrerpolicy="origin"></iframe>';
+}
 function navVis(){ document.querySelectorAll('[data-tab]').forEach(b => b.hidden = !tabOk(b.dataset.tab)); }
 
 /* ---------- board ---------- */

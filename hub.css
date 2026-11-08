@@ -756,3 +756,8 @@ body.tdragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
 .phview{position:fixed;inset:0;z-index:200;background:rgba(10,12,14,.88);display:grid;place-items:center;padding:24px;cursor:zoom-out}
 .phview img{max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .phview button{position:absolute;top:16px;right:18px;appearance:none;border:0;background:rgba(255,255,255,.15);color:#fff;width:40px;height:40px;border-radius:50%;font:400 26px/40px var(--font);cursor:pointer}
+
+#pBot:not([hidden]){display:flex;flex-direction:column}
+#pBot>.body.botbody{flex:1;display:flex;width:100%;box-sizing:border-box;padding:0 16px 16px;min-height:560px}
+#pBot iframe{flex:1;width:100%;border:1px solid var(--mist);border-radius:16px;background:#fff;min-height:540px}
+@media (max-width:860px){#pBot>.body.botbody{padding:0 8px 8px}#pBot iframe{min-height:calc(100dvh - 210px)}}
