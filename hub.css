@@ -761,3 +761,10 @@ body.tdragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
 #pBot>.body.botbody{flex:1;display:flex;width:100%;box-sizing:border-box;padding:0 16px 16px;min-height:560px}
 #pBot iframe{flex:1;width:100%;border:1px solid var(--mist);border-radius:16px;background:#fff;min-height:540px}
 @media (max-width:860px){#pBot>.body.botbody{padding:0 8px 8px}#pBot iframe{min-height:calc(100dvh - 210px)}}
+
+/* Content tab: internal (studio) view for the team */
+.seg.cview{margin-right:auto}
+.studiobody{max-width:none;padding:0 24px 24px}
+.studiobody[hidden]{display:none}
+.studiobody iframe{display:block;width:100%;height:calc(100vh - 150px);border:0;border-radius:var(--r-lg);background:var(--surface)}
+@media (max-width:860px){.studiobody{padding:0}.studiobody iframe{height:calc(100dvh - 190px);border-radius:0}}

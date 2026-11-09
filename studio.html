@@ -51,6 +51,19 @@ body.dark .panel p{color:#A99C90}
   .mbar .pbtn.primary{color:#2B211C}
   .app{height:calc(100dvh - 55px)}
 }
+.ok{color:#2F6B4A !important;font-weight:600}
+.lnk{appearance:none;border:0;background:none;color:#8E6E34;font:600 12px inherit;cursor:pointer;padding:0}
+.addov{position:fixed;inset:0;z-index:200;background:rgba(20,16,12,.55);display:grid;place-items:center;padding:16px}
+.addf{width:min(460px,100%);max-height:100%;overflow:auto;background:#F7F3EE;color:#2B211C;border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:12px;font-family:"Noto Sans Georgian",-apple-system,sans-serif}
+body.dark .addf{background:#1E1915;color:#F1EBE3}
+.addf h2{margin:0;font-size:19px}
+.addf label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:#6E6258}
+.addf input,.addf textarea{font:14px inherit;border:1px solid #D9CFC4;border-radius:10px;padding:9px 10px;background:#fff;color:#2B211C}
+.addf .hint{margin:0;font-size:12.5px;line-height:1.45;color:#6E6258}
+.addf .files{white-space:pre-line;font-size:12.5px;color:#2B211C}
+body.dark .addf .files{color:#F1EBE3}
+.addf .row{display:flex;gap:8px;justify-content:flex-end}
+.addf .msg{font-size:13px}
 </style>
 </head>
 <body>
@@ -59,7 +72,9 @@ body.dark .panel p{color:#A99C90}
   <aside class="panel" aria-label="მართვა">
     <h1><small id="cname">Studio</small>ინსტაგრამის ფიდი</h1>
     <p>პოსტები გადაათრიე ადგილზე, პოსტის გახსნისას ტექსტი პირდაპირ შეცვალე. ცვლილებები ყველა მოწყობილობაზე ჩანს. როცა რიგი მზადაა, დააჭირე ქვედა ღილაკს და Posting Schedule განახლდება.</p>
-    <div>
+    <p id="signedIn" class="ok" hidden>✓ შესული ხარ Google-ით, ცვლილებები ყველასთან ინახება.</p>
+    <button class="pbtn" id="addBtn" type="button">＋ ახალი პოსტი</button>
+    <div id="keyBox">
       <div class="lbl">გუნდის კოდი</div>
       <div class="keyrow"><input id="key" type="password" autocomplete="off" placeholder="კოდი (მხოლოდ ერთხელ)"><button class="pbtn" id="keySave" type="button">შენახვა</button></div>
     </div>
@@ -95,11 +110,15 @@ body.dark .panel p{color:#A99C90}
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-<script src="core.js"></script>
+<script src="core.js?v=29"></script>
 <script>
 let CFG = null, LAYOUT = null, POSTS = [], STATE = {comments:[], status:{}};
 const KEYNAME = 'igs_key_' + CLIENT;
 const key = () => ls.get(KEYNAME) || '';
+const SESKEY = 'hub_ses_' + CLIENT;
+/* the team code, or the Google sign-in this browser already has from the client app (you and Tamari) */
+const auth = () => key() ? {key: key()} : (ls.get(SESKEY) ? {session: ls.get(SESKEY)} : null);
+const NOAUTH = 'ცვლილება ჯერ არ შენახულა: შედი Google-ით აპში (app.html?c=' + CLIENT + ', დავალებების ჩანართი) ან ⚙︎ პანელში ჩაწერე გუნდის კოდი.';
 const statusOf = id => (STATE.status || {})[id] || '';
 const commentsOf = id => (STATE.comments || []).filter(c => c.post === id);
 
@@ -116,6 +135,7 @@ let toastT; function toast(m){ const t = $('#toast'); t.textContent = m; t.hidde
 const msg = (m) => { $('#msg').textContent = m; if(matchMedia('(max-width:860px)').matches) toast(m); };
 
 $('#key').value = key();
+if(!key() && ls.get(SESKEY)){ $('#keyBox').hidden = true; $('#signedIn').hidden = false; }
 $('#keySave').onclick = async () => {
   const k = $('#key').value.trim(); if(k.length < 6){ msg('კოდი მინიმუმ 6 სიმბოლო უნდა იყოს.'); return; }
   try{ await api.post(CFG, {action:'checkKey', key:k}); ls.set(KEYNAME, k); msg('კოდი შენახულია ✓'); flush(); }catch(e){ msg('კოდი არასწორია.'); }
@@ -150,10 +170,10 @@ function change(o){
 async function flush(){
   if(saving){ clearTimeout(saveT); saveT = setTimeout(flush, 400); return; }
   if(!pending.length) return;
-  if(!key()){ msg('ცვლილება ჯერ არ შენახულა და სხვები მას ვერ ხედავენ: ⚙︎ პანელში ერთხელ ჩაწერე გუნდის კოდი.'); return; }
+  if(!auth()){ msg(NOAUTH); return; }
   saving = true; const ops = pending; pending = [];
   try{
-    const r = await api.post(CFG, {action:'patch', key:key(), ops, base: CFG.defaultLayout});
+    const r = await api.post(CFG, {action:'patch', ...auth(), ops, base: CFG.defaultLayout});
     STATE = r.state; LAYOUT = JSON.parse(JSON.stringify(r.state.layout || LAYOUT));
     pending.forEach(o => applyOp(LAYOUT, o));
     keepPending(); rebuild(); refreshViews(); renderSide(); msg(ops.some(o => o.t === 'order') ? 'რიგი შენახულია ✓ ყველასთან ჩანს' : 'შენახულია ✓');
@@ -183,7 +203,7 @@ function renderGrid(){
     const badge = p.pinned ? IC.pin : p.video ? IC.reel : (p.media.length > 1 ? IC.car : '');
     return `<div class="tile" data-id="${p.id}" tabindex="0" role="button" aria-label="${esc(p.title)}"><img src="${mediaUrl(p.media[0])}" alt="">${badge}
       ${!p.posted && s ? `<span class="st ${s}">${s==='approved' ? '✓' : '✎'}</span>` : ''}${n ? `<span class="cc">💬 ${n}</span>` : ''}${p.variants ? `<span class="vb">${p.variants.length} ვარიანტი</span>` : ''}
-      <div class="tools"><button type="button" data-act="pin" aria-pressed="${p.pinned}" title="მიმაგრება">📌</button><button type="button" data-act="del" title="წაშლა">✕</button></div></div>`;
+      <div class="tools"><button type="button" data-act="link" title="დასადასტურებელი ბმულის კოპირება">🔗</button><button type="button" data-act="pin" aria-pressed="${p.pinned}" title="მიმაგრება">📌</button><button type="button" data-act="del" title="წაშლა">✕</button></div></div>`;
   }).join('');
 }
 function renderSide(){
@@ -207,17 +227,17 @@ document.addEventListener('click', async e => {
   const r = e.target.closest('[data-reopen]');
   if(r){
     e.stopPropagation();
-    if(!key()){ msg('ჯერ ⚙︎ პანელში ჩაწერე გუნდის კოდი.'); return; }
+    if(!auth()){ msg(NOAUTH); return; }
     r.disabled = true; r.textContent = 'ინახება…';
-    try{ const res = await api.post(CFG, {action:'reopen', key:key(), post:r.dataset.reopen}); STATE = res.state; document.querySelectorAll(`[data-reopen="${r.dataset.reopen}"]`).forEach(x => x.outerHTML = '<span class="fixed">↩ დაბრუნდა განსახილველად</span>'); renderSide(); refreshViews(); msg('დადასტურება მოხსნილია, პოსტი ისევ განსახილველია ✓'); }
+    try{ const res = await api.post(CFG, {action:'reopen', ...auth(), post:r.dataset.reopen}); STATE = res.state; document.querySelectorAll(`[data-reopen="${r.dataset.reopen}"]`).forEach(x => x.outerHTML = '<span class="fixed">↩ დაბრუნდა განსახილველად</span>'); renderSide(); refreshViews(); msg('დადასტურება მოხსნილია, პოსტი ისევ განსახილველია ✓'); }
     catch(err){ r.disabled = false; r.textContent = '↩ განსახილველად დაბრუნება'; msg('ვერ შეინახა: ' + err.message); }
     return;
   }
   const b = e.target.closest('[data-fix]'); if(!b) return;
   e.stopPropagation();
-  if(!key()){ msg('ჯერ ⚙︎ პანელში ჩაწერე გუნდის კოდი.'); return; }
+  if(!auth()){ msg(NOAUTH); return; }
   b.disabled = true; b.textContent = 'ინახება…';
-  try{ const r = await api.post(CFG, {action:'resolve', key:key(), post:b.dataset.fix, ts:Number(b.dataset.ts)}); STATE = r.state; document.querySelectorAll(`[data-fix="${b.dataset.fix}"][data-ts="${b.dataset.ts}"]`).forEach(x => x.outerHTML = '<span class="fixed">✓ გასწორდა</span>'); renderSide(); refreshViews(); msg('მონიშნულია: გასწორდა ✓'); }
+  try{ const r = await api.post(CFG, {action:'resolve', ...auth(), post:b.dataset.fix, ts:Number(b.dataset.ts)}); STATE = r.state; document.querySelectorAll(`[data-fix="${b.dataset.fix}"][data-ts="${b.dataset.ts}"]`).forEach(x => x.outerHTML = '<span class="fixed">✓ გასწორდა</span>'); renderSide(); refreshViews(); msg('მონიშნულია: გასწორდა ✓'); }
   catch(err){ b.disabled = false; b.textContent = '✓ გასწორდა'; msg('ვერ შეინახა: ' + err.message); }
 });
 
@@ -226,6 +246,7 @@ $('#grid').addEventListener('pointerdown', e => {
   const b = e.target.closest('[data-act]'); if(!b) return;
   e.preventDefault(); e.stopPropagation();
   const id = b.closest('.tile').dataset.id, ids = idsOf(groupOf(id));
+  if(b.dataset.act === 'link'){ copyPostLink(id); return; }
   if(b.dataset.act === 'pin'){ const on = !(LAYOUT.pinned || []).includes(id); ids.forEach(x => change({t:'pin', id: x, on})); }
   if(b.dataset.act === 'del'){ ids.forEach(x => change({t:'remove', id: x})); toast('პოსტი ამოღებულია. პანელიდან დააბრუნებ.'); }
   renderGrid(); renderSide();
@@ -250,7 +271,7 @@ function renderFeed(){
     <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
     <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}" contenteditable="true" spellcheck="false">${esc(p.caption)}</span></div>
     <div class="cmts">${idsOf(p).flatMap(id => commentsOf(id).map(c => ({...c, vi: p.variants ? idsOf(p).indexOf(id) + 1 : 0}))).sort((a, b) => a.ts - b.ts).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.vi ? `[ვარიანტი ${c.vi}] ` : ''}${c.type==='approve' ? (c.vi ? '✓ აირჩია' : '✓ დაადასტურა') : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
-    <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}</div>
+    <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}${p.posted ? '' : ` · <button type="button" class="lnk" data-link="${p.id}">🔗 ბმული დასადასტურებლად</button>`}</div>
   </article>`).join('');
   document.querySelectorAll('#feed .track').forEach(t => {
     const post = t.closest('.post'), dots = post.querySelectorAll('.dots i'), cnt = post.querySelector('.cnt');
@@ -263,6 +284,7 @@ $('#feed').addEventListener('input', e => {
   const txt = el.innerText.replace(/\n$/, ''); idsOf(groupOf(el.dataset.cap)).forEach(id => change({t:'caption', id, text: txt}));
 });
 $('#feed').addEventListener('click', e => {
+  const lk = e.target.closest('[data-link]'); if(lk){ copyPostLink(lk.dataset.link); return; }
   const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
   const vid = e.target.closest('video'); if(vid){ const w = vid.closest('[data-v]'); openReelsView(w ? w.dataset.v : vid.closest('.post').id.slice(5)); }
 });
@@ -274,14 +296,54 @@ function openPost(id){
 }
 $('#back').onclick = () => { $('#fv').hidden = true; $('#pv').hidden = false; renderGrid(); };
 
+/* one post's own link: opens just that post in the client app, with approve and comment */
+async function copyPostLink(id){
+  const url = new URL('app.html?c=' + CLIENT + '&post=' + encodeURIComponent(id), location.href).href;
+  try{ await navigator.clipboard.writeText(url); toast('ბმული დაკოპირდა ✓ გაუგზავნე დასადასტურებლად'); }
+  catch(e){ prompt('დააკოპირე ბმული:', url); }
+}
+
+/* add a new post: files go to Drive (shared by link, like the preview files), the post shows at the top of the grid */
+function openAdd(){
+  const box = document.createElement('div'); box.className = 'addov';
+  box.innerHTML = `<form class="addf"><h2>ახალი პოსტი</h2>
+    <label>სათაური<input name="title" maxlength="120" required placeholder="მაგ. ვინირების მოვლა"></label>
+    <label>ტექსტი (caption)<textarea name="caption" maxlength="2200" rows="4" placeholder="პოსტის ტექსტი"></textarea></label>
+    <label>ფაილები<input name="files" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" required></label>
+    <p class="hint">ფოტო ან კარუსელი: აირჩიე სლაიდები რიგით. რილსი: ვიდეო და, თუ გინდა, ქავერის ფოტო. ფაილები უცვლელად ინახება Drive-ში, ერთად 35 MB-მდე.</p>
+    <div class="files"></div>
+    <div class="row"><button type="button" class="pbtn" data-x>გაუქმება</button><button class="pbtn primary" type="submit">დამატება</button></div>
+    <div class="msg"></div></form>`;
+  document.body.appendChild(box);
+  const f = box.querySelector('form'), m = box.querySelector('.msg'), inp = f.files;
+  box.addEventListener('click', e => { if(e.target === box || e.target.closest('[data-x]')) box.remove(); });
+  inp.onchange = () => { box.querySelector('.files').textContent = [...inp.files].map((x, i) => `${i + 1}. ${x.name} (${(x.size / 1048576).toFixed(1)} MB)`).join('\n'); };
+  f.onsubmit = async e => {
+    e.preventDefault();
+    if(!auth()){ m.textContent = NOAUTH; return; }
+    const files = [...inp.files], total = files.reduce((a, x) => a + x.size, 0);
+    if(!files.length){ m.textContent = 'აირჩიე ფაილი.'; return; }
+    if(total > 35 * 1048576){ m.textContent = 'ფაილები ერთად 35 MB-ზე მეტია. ვიდეო ცალკე პოსტად დაამატე ან შეამცირე.'; return; }
+    const btn = f.querySelector('[type=submit]'); btn.disabled = true; m.textContent = 'იტვირთება… (ვიდეოს შეიძლება 1 წუთი დასჭირდეს)';
+    try{
+      const enc = await Promise.all(files.map(x => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok({name: x.name, mime: x.type, b64: String(r.result).split(',')[1]}); r.onerror = no; r.readAsDataURL(x); })));
+      const hasVideo = files.some(x => /^video/.test(x.type));
+      const r = await api.post(CFG, {action:'addPost', ...auth(), post: {title: f.title.value.trim(), caption: f.caption.value.trim(), type: hasVideo ? 'reel' : files.length > 1 ? 'carousel' : 'photo', files: enc}});
+      STATE = r.state; if(r.state.layout && !pending.length){ LAYOUT = JSON.parse(JSON.stringify(r.state.layout)); }
+      rebuild(); renderGrid(); renderSide(); box.remove(); toast('პოსტი დაემატა ✓ ყველასთან ჩანს');
+    }catch(err){ btn.disabled = false; m.textContent = 'ვერ დაემატა: ' + err.message; }
+  };
+}
+$('#addBtn').onclick = openAdd;
+
 /* send the arrangement to the posting schedule */
 $('#syncBtn').onclick = async () => {
-  if(!key()){ msg('ჯერ ჩაწერე გუნდის კოდი.'); return; }
+  if(!auth()){ msg(NOAUTH); return; }
   const btn = $('#syncBtn'); btn.disabled = true; msg('Posting Schedule ახლდება… (ფაილების ატვირთვას შეიძლება 1 წუთი დასჭირდეს)');
   const posts = flatVariants(POSTS).map(p => ({id:p.id, title:p.title, caption:p.caption, match:p.match || '', posted:!!p.posted, postType:p.postType,
     video: p.video ? p.video : '', count: p.video ? 1 : p.media.length, drive: p.drive || '', files: p.video ? [p.video] : p.media}));
   try{
-    const r = await api.post(CFG, {action:'sync', key:key(), layout: LAYOUT, posts, baseUrl: new URL(BASE + 'media/', location.href).href});
+    const r = await api.post(CFG, {action:'sync', ...auth(), layout: LAYOUT, posts, baseUrl: new URL(BASE + 'media/', location.href).href});
     STATE = r.state; renderSide(); renderGrid();
     msg(`მზადაა ✓ გადალაგდა ${r.moved}, ახალი რიგი ${r.created}, დაკავშირდა ${r.linked}, ატვირთვა ${r.uploaded}.`);
   }catch(e){ msg('ვერ მოხერხდა: ' + e.message); }

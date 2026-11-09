@@ -86,8 +86,10 @@ shell.innerHTML = `
   <main class="main">
     <section class="pane" id="pContent">
       <div class="head"><div class="ttl"><h1>კონტენტი</h1><p>ასე გამოჩნდება დაგეგმილი პოსტები. გახსენით პოსტი, დაადასტურეთ ან დაწერეთ, რა შევცვალოთ.</p></div>
+        <div class="seg cview" role="group" aria-label="ხედი" id="cviewSeg" hidden><span class="thumb"></span><button type="button" data-cview="client" aria-pressed="true">კლიენტის ხედი</button><button type="button" data-cview="team" aria-pressed="false">შიდა ხედი</button></div>
         <div class="ctrls"><div class="seg" role="group" aria-label="პლატფორმა" id="platSeg"><span class="thumb"></span>${NETS.map(([k, t]) => `<button type="button" data-net="${k}" aria-pressed="false">${t}</button>`).join('')}</div>
         <div class="seg dev" role="group" aria-label="მოწყობილობა" id="devSeg"><span class="thumb"></span><button type="button" data-dev="m" aria-pressed="false" title="ტელეფონი">${I.mobile}<span>ტელეფონი</span></button><button type="button" data-dev="d" aria-pressed="false" title="კომპიუტერი">${I.desktop}<span>კომპიუტერი</span></button></div></div></div>
+      <div class="body studiobody" hidden></div>
       <div class="body">
         <div class="plat" data-plat="ig"></div>
         <div class="plat" data-plat="igweb" hidden></div>
@@ -700,7 +702,28 @@ function botFrame(){
   if(b.firstChild) return;
   b.innerHTML = '<iframe src="https://likedent-bot.pages.dev/test" title="Likedent ბოტი" allow="identity-credentials-get; clipboard-write" referrerpolicy="origin"></iframe>';
 }
-function navVis(){ document.querySelectorAll('[data-tab]').forEach(b => b.hidden = !tabOk(b.dataset.tab)); }
+function navVis(){ document.querySelectorAll('[data-tab]').forEach(b => b.hidden = !tabOk(b.dataset.tab)); paintCview(); }
+/* the internal team (you and Tamari) can switch the Content tab to the studio: order, captions, links, new posts */
+const CVKEY = 'hub_cview_' + CLIENT;
+let cview = ls.get(CVKEY) === 'team' ? 'team' : 'client';
+function paintCview(){
+  const seg = $('#cviewSeg'); if(!seg) return;
+  const can = loaded && CAN_TASKS && !DEMO;
+  seg.hidden = !can;
+  const team = can && cview === 'team', pane = $('#pContent');
+  pane.classList.toggle('teamview', team);
+  pane.querySelector('.studiobody').hidden = !team;
+  pane.querySelector('.ctrls').hidden = team;
+  pane.querySelector('.body:not(.studiobody)').hidden = team;
+  if(team && !pane.querySelector('.studiobody iframe')) pane.querySelector('.studiobody').innerHTML = `<iframe src="studio.html?c=${CLIENT}&embed=1" title="სტუდიო"></iframe>`;
+  if(can) setSeg(seg, 'data-cview', cview);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('#cviewSeg [data-cview]'); if(!b) return;
+  cview = b.dataset.cview; ls.set(CVKEY, cview);
+  if(cview === 'client'){ const f = $('#pContent .studiobody iframe'); if(f) f.remove(); try{ if(window.reloadPreview) window.reloadPreview(); }catch(err){} }
+  paintCview(); if(cview === 'client') showPlat(plat);
+});
 
 /* ---------- board ---------- */
 function visible(t){

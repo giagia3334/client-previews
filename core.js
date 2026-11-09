@@ -10,7 +10,22 @@ const ls = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 };
-const mediaUrl = f => BASE + 'media/' + f;
+/* media: a file in the repo, or "gd:<id>" for a post added from the studio (Drive file shared by link):
+   gd:<id> image, gd:<id>:v video, gd:<id>:t the video's thumbnail */
+const mediaUrl = f => {
+  const m = /^gd:([\w-]+)(?::([vt]))?$/.exec(String(f || ''));
+  if(!m) return BASE + 'media/' + f;
+  if(m[2] === 'v') return 'https://drive.google.com/uc?export=download&id=' + m[1];
+  if(m[2] === 't') return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1080';
+  return 'https://lh3.googleusercontent.com/d/' + m[1] + '=w1080';
+};
+/* posts added from the studio come with the shared state; every page shows them next to config.json's posts */
+function mergeExtra(cfg, s){
+  if(!cfg || !s || !Array.isArray(s.extraPosts)) return;
+  cfg._basePosts = cfg._basePosts || cfg.posts;
+  const ids = new Set(cfg._basePosts.map(p => p.id));
+  cfg.posts = cfg._basePosts.concat(s.extraPosts.filter(p => p && p.id && !ids.has(p.id)));
+}
 
 /* home-screen icon (white logo) when the page is added from Safari or Chrome */
 (() => {
@@ -30,16 +45,16 @@ const api = {
   async state(cfg){
     if(!cfg.api) return null;
     const r = await fetch(cfg.api + '?action=state&t=' + Date.now());
-    const j = await r.json(); if(!j.ok) throw new Error(j.error || 'api'); return j;
+    const j = await r.json(); if(!j.ok) throw new Error(j.error || 'api'); mergeExtra(cfg, j); return j;
   },
   async post(cfg, body){
     if(!cfg.api) throw new Error('no api');
     // text/plain body keeps this a "simple" request (no CORS preflight) for Apps Script
     // a stuck request must not leave the page waiting forever
-    const ac = new AbortController(), t = setTimeout(() => ac.abort(), body.action === 'sync' ? 300000 : 30000);
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), (body.action === 'sync' || body.action === 'addPost') ? 300000 : 30000);
     try{
       const r = await fetch(cfg.api, {method:'POST', body: JSON.stringify(body), signal: ac.signal});
-      const j = await r.json(); if(!j.ok) throw new Error(j.error || 'api'); return j;
+      const j = await r.json(); if(!j.ok) throw new Error(j.error || 'api'); if(j.state) mergeExtra(cfg, j.state); return j;
     }finally{ clearTimeout(t); }
   }
 };
