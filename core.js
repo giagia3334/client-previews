@@ -15,10 +15,22 @@ const ls = {
 const mediaUrl = f => {
   const m = /^gd:([\w-]+)(?::([vt]))?$/.exec(String(f || ''));
   if(!m) return BASE + 'media/' + f;
-  if(m[2] === 'v') return 'https://drive.google.com/uc?export=download&id=' + m[1];
+  if(m[2] === 'v') return 'https://drive.google.com/file/d/' + m[1] + '/preview';   // Drive's own player (Drive does not stream into <video> on other sites)
   if(m[2] === 't') return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1080';
   return 'https://lh3.googleusercontent.com/d/' + m[1] + '=w1080';
 };
+/* a <video> pointing at a Drive player becomes that player's iframe, wherever a page draws it */
+function driveVideos(root){
+  if(!root || !root.querySelectorAll) return;
+  const list = root.matches && root.matches('video[src*="drive.google.com/file/d/"]') ? [root] : root.querySelectorAll('video[src*="drive.google.com/file/d/"]');
+  list.forEach(v => {
+    const f = document.createElement('iframe');
+    f.src = v.getAttribute('src'); f.allow = 'autoplay; fullscreen'; f.setAttribute('allowfullscreen', ''); f.title = 'ვიდეო';
+    f.className = (v.className + ' gdvideo').trim(); f.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000';
+    v.replaceWith(f);
+  });
+}
+new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if(n.nodeType === 1) driveVideos(n); }))).observe(document.documentElement, {childList: true, subtree: true});
 /* posts added from the studio come with the shared state; every page shows them next to config.json's posts */
 function mergeExtra(cfg, s){
   if(!cfg || !s || !Array.isArray(s.extraPosts)) return;

@@ -768,3 +768,4 @@ body.tdragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
 .studiobody[hidden]{display:none}
 .studiobody iframe{display:block;width:100%;height:calc(100vh - 150px);border:0;border-radius:var(--r-lg);background:var(--surface)}
 @media (max-width:860px){.studiobody{padding:0}.studiobody iframe{height:calc(100dvh - 190px);border-radius:0}}
+#pContent .ctrls[hidden]{display:none}

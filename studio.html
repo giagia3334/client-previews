@@ -2,6 +2,7 @@
 <html lang="ka">
 <head>
 <meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>Studio · Instagram feed</title>
@@ -304,6 +305,17 @@ async function copyPostLink(id){
 }
 
 /* add a new post: files go to Drive (shared by link, like the preview files), the post shows at the top of the grid */
+async function videoCover(file){
+  try{
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(file);
+    await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = no; setTimeout(no, 15000); });
+    v.currentTime = Math.min(1, (v.duration || 2) / 2);
+    await new Promise(ok => { v.onseeked = ok; setTimeout(ok, 4000); });
+    const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+    const b64 = c.toDataURL('image/jpeg', 0.9).split(',')[1]; URL.revokeObjectURL(v.src);
+    return b64 ? {name: 'cover.jpg', mime: 'image/jpeg', b64} : null;
+  }catch(e){ return null; }
+}
 function openAdd(){
   const box = document.createElement('div'); box.className = 'addov';
   box.innerHTML = `<form class="addf"><h2>ახალი პოსტი</h2>
@@ -328,6 +340,8 @@ function openAdd(){
     try{
       const enc = await Promise.all(files.map(x => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok({name: x.name, mime: x.type, b64: String(r.result).split(',')[1]}); r.onerror = no; r.readAsDataURL(x); })));
       const hasVideo = files.some(x => /^video/.test(x.type));
+      // a reel without a cover photo: use a frame of the video, so the grid shows a picture right away
+      if(hasVideo && !files.some(x => /^image/.test(x.type))){ m.textContent = 'ქავერს ვიღებ ვიდეოდან…'; const cov = await videoCover(files.find(x => /^video/.test(x.type))); if(cov) enc.unshift(cov); m.textContent = 'იტვირთება… (ვიდეოს შეიძლება 1 წუთი დასჭირდეს)'; }
       const r = await api.post(CFG, {action:'addPost', ...auth(), post: {title: f.title.value.trim(), caption: f.caption.value.trim(), type: hasVideo ? 'reel' : files.length > 1 ? 'carousel' : 'photo', files: enc}});
       STATE = r.state; if(r.state.layout && !pending.length){ LAYOUT = JSON.parse(JSON.stringify(r.state.layout)); }
       rebuild(); renderGrid(); renderSide(); box.remove(); toast('პოსტი დაემატა ✓ ყველასთან ჩანს');
