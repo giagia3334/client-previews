@@ -398,6 +398,8 @@ function renderReel(full){
       ${vs.length > 1 ? `<div class="rl-var">ვარიანტი <span>${pmVar + 1}</span>/${vs.length} · ← →</div>` : ''}
       <div class="rl-snd" aria-hidden="true">${IC.muted}</div>
       <div class="rl-bot"><div class="rl-cap"><b>${esc(CFG.username)}</b> <span></span></div><div class="rl-b"></div></div>`;
+    // horizontal videos (YouTube/Facebook tours) are shown whole, not cropped to fill a tall screen
+    pm.querySelectorAll('.rl-slide video').forEach(vd => { const wide = () => vd.closest('.rl-slide').classList.toggle('rl-wide', vd.videoWidth > vd.videoHeight); vd.addEventListener('loadedmetadata', wide); if(vd.readyState >= 1) wide(); });
     const tr = pm.querySelector('.rl-track');
     requestAnimationFrame(() => { tr.scrollLeft = pmVar * tr.clientWidth; reelVideos(true); });
     tr.addEventListener('scroll', () => {
