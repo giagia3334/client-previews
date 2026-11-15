@@ -572,7 +572,10 @@ const webTag = l => (String(l.notes || '').match(/\[web:[\w-]+\]/) || [''])[0];
 const leadSrc = l => { const t = String(l.notes || '').split('\n')[0].trim(); return l.channel === 'website' && WEBTAB[t] ? WEBTAB[t] : (CHANNELS[l.channel] || 'სხვა'); };
 const srcKey = l => ({'ჯავშანი': 'book', 'კონსულტაცია': 'cons', 'კითხვა ექიმს': 'ask'})[leadSrc(l)] || 'other';
 /* what the patient wrote, without the import's bookkeeping (tab name, [web:…] tag) */
-const leadNotes = l => String(l.notes || '').split('\n').filter((x, i) => !(i === 0 && l.channel === 'website' && WEBTAB[x.trim()]) && !/^\[web:[\w-]+\]$/.test(x.trim())).join('\n').trim();
+const GMONTHS = ['იანვარი','თებერვალი','მარტი','აპრილი','მაისი','ივნისი','ივლისი','აგვისტო','სექტემბერი','ოქტომბერი','ნოემბერი','დეკემბერი'];
+/* older imports wrote "სასურველი: 2026-11-12, დღე (13:00 – 16:00)"; show it as "სასურველი დრო: 12 ნოემბერი (13:00 – 16:00)" */
+const niceWhen = x => x.replace(/^სასურველი:\s*(\d{4})-(\d{2})-(\d{2})(?:,\s*[^(]*?(\([^)]*\)))?.*$/, (m, y, mo, d, t) => `სასურველი დრო: ${+d} ${GMONTHS[+mo - 1]}${t ? ' ' + t : ''}`);
+const leadNotes = l => String(l.notes || '').split('\n').filter((x, i) => !(i === 0 && l.channel === 'website' && WEBTAB[x.trim()]) && !/^\[web:[\w-]+\]$/.test(x.trim())).map(niceWhen).join('\n').trim();
 const gel = n => '₾' + Math.round(Number(n) || 0).toLocaleString('en-US');
 const small = () => matchMedia('(max-width: 860px)').matches;
 function leadAgo(ts){
