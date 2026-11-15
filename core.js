@@ -26,8 +26,12 @@ function driveVideos(root){
   list.forEach(v => {
     const f = document.createElement('iframe');
     f.src = v.getAttribute('src'); f.allow = 'autoplay; fullscreen'; f.setAttribute('allowfullscreen', ''); f.title = 'ვიდეო';
-    f.className = (v.className + ' gdvideo').trim(); f.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000';
+    /* the frame has no size of its own: give it the feed's 4:5 video shape, or it collapses to a 150px strip */
+    f.className = (v.className + ' gdvideo').trim(); f.style.cssText = 'width:100%;height:auto;aspect-ratio:4/5;border:0;display:block;background:#000';
+    const box = v.parentElement;
     v.replaceWith(f);
+    /* Drive's player has its own play and sound controls; ours would sit on top and do nothing */
+    if(box) box.querySelectorAll(':scope > .mute, :scope > .playov').forEach(b => b.remove());
   });
 }
 new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if(n.nodeType === 1) driveVideos(n); }))).observe(document.documentElement, {childList: true, subtree: true});
