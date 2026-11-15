@@ -13,12 +13,13 @@ const undeep = () => document.documentElement.classList.remove('deeplink');
 const CACHEKEY = 'hub_cache_' + CLIENT, PUBKEY = 'hub_pub_' + CLIENT;
 const PINKEY = 'hub_pin_' + CLIENT, PLATKEY = 'hub_plat_' + CLIENT, SESKEY = 'hub_ses_' + CLIENT;
 const STAGES = [
-  {id:'new',    label:'ახალი პაციენტი', short:'ახალი',    next:'booked', nextLabel:'დაიჯავშნა'},
-  {id:'booked', label:'დაჯავშნილი',      short:'დაჯავშნა', next:'done',   nextLabel:'ჩაიტარა'},
-  {id:'done',   label:'ჩატარებული',      short:'ჩაიტარა'},
+  {id:'new',       label:'ახალი',          short:'ახალი',       next:'contacted', nextLabel:'დავუკავშირდით'},
+  {id:'contacted', label:'დავუკავშირდით',  short:'დაკავშირება', next:'booked',    nextLabel:'დაიჯავშნა'},
+  {id:'booked',    label:'დაჯავშნილი',      short:'დაჯავშნა',    next:'done',      nextLabel:'მოვიდა'},
+  {id:'done',      label:'მოვიდა',          short:'მოვიდა'},
 ];
 const LOST = {id:'lost', label:'არქივი', short:'არქივი'};
-const STAGE_LABEL = {new:'ახალი პაციენტი', booked:'დაჯავშნილი', done:'ჩატარებული', lost:'არქივი'};
+const STAGE_LABEL = {new:'ახალი', contacted:'დავუკავშირდით', booked:'დაჯავშნილი', done:'მოვიდა', lost:'არქივი'};
 const CHANNELS = {website:'საიტი', facebook:'Facebook', instagram:'Instagram', google:'Google', tiktok:'TikTok', sms:'SMS', phone:'ზარი', walkin:'კლინიკაში მოვიდა', referral:'რეკომენდაცია', other:'სხვა'};
 const SERVICES = ['კონსულტაცია','კბილი ან ღრძილი მაწუხებს','წმენდა და შემოწმება','კბილის აღდგენა ან ჩანაცვლება','ღიმილის გალამაზება','ბავშვისთვის','სხვა'];
 const MONTHS = ['იან','თებ','მარ','აპრ','მაი','ივნ','ივლ','აგვ','სექ','ოქტ','ნოე','დეკ'];
@@ -564,42 +565,83 @@ document.addEventListener('submit', async e => {
   ls.set(PINKEY, v); f.querySelector('button').disabled = true; await loadHub();
 });
 
+/* pipeline: one board for every request (website booking, free consultation, question to the doctor, calls, walk-ins).
+   Computer: drag a card to another column. Phone: pick a stage on top, move a card with its arrow button. */
+const WEBTAB = {'ჯავშნები': 'ჯავშანი', 'უფასო კონსულტაცია': 'კონსულტაცია', 'კითხვა ექიმს': 'კითხვა ექიმს'};
+const webTag = l => (String(l.notes || '').match(/\[web:[\w-]+\]/) || [''])[0];
+const leadSrc = l => { const t = String(l.notes || '').split('\n')[0].trim(); return l.channel === 'website' && WEBTAB[t] ? WEBTAB[t] : (CHANNELS[l.channel] || 'სხვა'); };
+const srcKey = l => ({'ჯავშანი': 'book', 'კონსულტაცია': 'cons', 'კითხვა ექიმს': 'ask'})[leadSrc(l)] || 'other';
+/* what the patient wrote, without the import's bookkeeping (tab name, [web:…] tag) */
+const leadNotes = l => String(l.notes || '').split('\n').filter((x, i) => !(i === 0 && l.channel === 'website' && WEBTAB[x.trim()]) && !/^\[web:[\w-]+\]$/.test(x.trim())).join('\n').trim();
+const gel = n => '₾' + Math.round(Number(n) || 0).toLocaleString('en-US');
+const small = () => matchMedia('(max-width: 860px)').matches;
+function leadAgo(ts){
+  const m = Math.max(0, Math.round((Date.now() - ts) / 6e4));
+  if(m < 2) return 'ახლახან';
+  if(m < 60) return `${m} წთ წინ`;
+  const h = Math.round(m / 60); if(h < 24) return `${h} სთ წინ`;
+  const d = Math.round(h / 24); return d < 7 ? `${d} დღის წინ` : fmt(ts).split(',')[0];
+}
+let ptQ = '', ptSrc = '';
+const PSRC = [['', 'ყველა'], ['book', 'ჯავშანი'], ['cons', 'კონსულტაცია'], ['ask', 'კითხვა ექიმს'], ['other', 'ზარი და სხვა']];
+const shown = () => LEADS.filter(l => (!ptSrc || srcKey(l) === ptSrc) &&
+  (!ptQ || [l.name, l.phone, l.email, l.service, l.notes].join(' ').toLowerCase().includes(ptQ)));
+
 function leadHTML(l){
-  const st = STAGES.find(s => s.id === l.stage);
-  return `<article class="lead" data-lead="${esc(l.id)}" tabindex="0">
-    <div class="lt"><b>${esc(l.name || l.phone || 'უსახელო')}</b><span class="tag">${esc(CHANNELS[l.channel] || l.channel || 'სხვა')}</span></div>
-    <div class="ls">${l.service ? esc(l.service) + ', ' : ''}${fmt(l.created)}</div>
-    ${l.notes ? `<div class="ln">${esc(l.notes)}</div>` : ''}
-    <div class="la">${l.phone ? `<a class="btn sm" href="${telHref(l.phone)}" data-stop>${I.phone}დარეკვა</a><a class="btn sm" href="${waHref(l.phone)}" target="_blank" rel="noopener" data-stop>${I.chat}WhatsApp</a>` : ''}<span class="sp"></span>
-      ${st && st.next ? `<button class="btn sm ${st.next === 'done' ? 'emerald' : 'primary'}" type="button" data-next="${esc(l.id)}">${I.check}${st.nextLabel}</button>` : ''}</div>
+  const st = STAGES.find(s => s.id === l.stage), nc = (l.comments || []).length, sv = l.service || '';
+  return `<article class="lead" data-lead="${esc(l.id)}" tabindex="0" draggable="true">
+    <div class="lt"><b>${esc(l.name || l.phone || 'უსახელო')}</b>${l.value ? `<span class="val">${gel(l.value)}</span>` : ''}</div>
+    <div class="lm"><span class="src src-${srcKey(l)}">${esc(leadSrc(l))}</span>${sv && sv !== leadSrc(l) ? `<span class="sv">${esc(sv)}</span>` : ''}</div>
+    <div class="lf"><span class="ag" title="${esc(fmt(l.created))}">${leadAgo(l.created)}</span>${nc ? `<span class="nc" title="კომენტარები">${TI.bubble}${nc}</span>` : ''}<span class="sp"></span>
+      ${l.phone ? `<a class="ib" href="${telHref(l.phone)}" data-stop title="დარეკვა" aria-label="დარეკვა">${I.phone}</a><a class="ib" href="${waHref(l.phone)}" target="_blank" rel="noopener" data-stop title="WhatsApp" aria-label="WhatsApp">${I.chat}</a>` : ''}
+      ${st && st.next ? `<button class="ib nx" type="button" data-next="${esc(l.id)}" title="${esc(st.nextLabel)}" aria-label="${esc(st.nextLabel)}">${I.check}<span>${esc(st.nextLabel)}</span></button>` : ''}</div>
   </article>`;
 }
 function renderPatients(){
-  const by = s => LEADS.filter(l => l.stage === s);
-  const nNew = by('new').length, lost = by('lost');
-  $('#ptSub').textContent = nNew ? `${nNew} ახალი მოთხოვნა ელოდება ზარს.` : 'ახალი მოთხოვნები აქ გამოჩნდება, საიტიდან, რეკლამიდან და ზარებიდან.';
+  const list = shown(), by = s => list.filter(l => l.stage === s);
+  const nNew = LEADS.filter(l => l.stage === 'new').length, lost = by('lost');
+  $('#ptSub').textContent = nNew ? `${nNew} ახალი მოთხოვნა ელოდება ზარს.` : 'საიტის ჯავშნები, კონსულტაციები და კითხვები აქ ავტომატურად შემოდის.';
   if(ME || session()) $('#ptSub').insertAdjacentHTML('beforeend', ` <span class="who">${esc(ME)} <button class="linkbtn" type="button" data-signout>გასვლა</button></span>`);
-  const chips = [...STAGES, LOST].map(s => `<button type="button" class="chip" data-pick="${s.id}" aria-pressed="${pickStage === s.id}">${s.short}<i>${by(s.id).length}</i></button>`).join('');
+  const sum = items => items.reduce((a, l) => a + (Number(l.value) || 0), 0);
+  const chips = [...STAGES, LOST].map(s => `<button type="button" class="chip s-${s.id}" data-pick="${s.id}" aria-pressed="${pickStage === s.id}"><span class="dot"></span>${s.short}<i>${by(s.id).length}</i></button>`).join('');
   const col = (s, extra = '') => {
-    const items = by(s.id);
-    return `<section class="col s-${s.id} ${extra}" ${pickStage === s.id ? '' : 'data-off'} ${s.id === 'lost' && !showLost && !small() ? 'hidden' : ''}>
-      <div class="colh"><span class="dot"></span>${s.label}<i>${items.length}</i></div>
-      ${items.length ? items.map(leadHTML).join('') : `<div class="empty">${s.id === 'new' ? 'ახალი მოთხოვნა ჯერ არ არის. დაამატეთ ზარით ან SMS-ით მოსული პაციენტი ღილაკით „ახალი პაციენტი“.' : 'აქ ჯერ არავინაა.'}</div>`}
+    const items = by(s.id), tot = sum(items);
+    return `<section class="col s-${s.id} ${extra}" data-col="${s.id}" ${pickStage === s.id ? '' : 'data-off'} ${s.id === 'lost' && !showLost && !small() ? 'hidden' : ''}>
+      <div class="colh"><span>${s.label}</span><i>${items.length}</i>${tot ? `<em>${gel(tot)}</em>` : ''}</div>
+      <div class="cards">${items.length ? items.map(leadHTML).join('') : `<div class="empty">${s.id === 'new' && !ptQ && !ptSrc ? 'ახალი მოთხოვნა ჯერ არ არის. საიტიდან შემოსული აქ თავისით გამოჩნდება.' : 'აქ ჯერ არავინაა.'}</div>`}</div>
     </section>`;
   };
-  $('#ptBody').innerHTML = `<div class="chips" role="group" aria-label="ეტაპი">${chips}</div>
+  const q = document.activeElement && document.activeElement.id === 'ptQ';
+  $('#ptBody').innerHTML = `<div class="ptools">
+      <label class="ptq">${TI.search}<input id="ptQ" type="search" placeholder="ძებნა: სახელი, ტელეფონი" value="${esc(ptQ)}" autocomplete="off"></label>
+      <div class="psrc" role="group" aria-label="საიდან">${PSRC.map(([k, t]) => `<button type="button" class="pill" data-src="${k}" aria-pressed="${ptSrc === k}">${t}</button>`).join('')}</div>
+    </div>
+    <div class="chips" role="group" aria-label="ეტაპი">${chips}</div>
     <div class="board">${STAGES.map(s => col(s)).join('')}${col(LOST, 'lostcol')}</div>
     ${lost.length && !small() ? `<button class="btn sm lostbtn" type="button" data-lost>${showLost ? 'არქივის დამალვა' : `არქივი (${lost.length})`}</button>` : ''}`;
+  if(q){ const i = $('#ptQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
 }
+$('#pPatients').addEventListener('input', e => { if(e.target.id === 'ptQ'){ ptQ = e.target.value.trim().toLowerCase(); renderPatients(); } });
 $('#pPatients').addEventListener('click', e => {
   if(e.target.closest('[data-stop]')) return;
   if(e.target.closest('#ptAdd')){ openAdd(); return; }
+  const sr = e.target.closest('[data-src]'); if(sr){ ptSrc = sr.dataset.src; renderPatients(); return; }
   const pk = e.target.closest('[data-pick]'); if(pk){ pickStage = pk.dataset.pick; renderPatients(); return; }
   if(e.target.closest('[data-lost]')){ showLost = !showLost; renderPatients(); return; }
   const nx = e.target.closest('[data-next]'); if(nx){ const l = LEADS.find(x => x.id === nx.dataset.next), st = STAGES.find(s => s.id === l.stage); move(l, st.next); return; }
   const c = e.target.closest('[data-lead]'); if(c) openLead(c.dataset.lead);
 });
 $('#pPatients').addEventListener('keydown', e => { const c = e.target.closest('[data-lead]'); if(c && e.key === 'Enter' && e.target === c) openLead(c.dataset.lead); });
+/* drag a card to another column (mouse) */
+let dragLead = null;
+$('#pPatients').addEventListener('dragstart', e => { const c = e.target.closest('[data-lead]'); if(!c) return; dragLead = c.dataset.lead; c.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', dragLead); }catch(err){} });
+$('#pPatients').addEventListener('dragend', () => { dragLead = null; document.querySelectorAll('.lead.drag, .col.over').forEach(x => x.classList.remove('drag', 'over')); });
+$('#pPatients').addEventListener('dragover', e => { const c = dragLead && e.target.closest('[data-col]'); if(!c) return; e.preventDefault(); document.querySelectorAll('.col.over').forEach(x => x !== c && x.classList.remove('over')); c.classList.add('over'); });
+$('#pPatients').addEventListener('drop', e => {
+  const c = e.target.closest('[data-col]'); if(!c || !dragLead) return; e.preventDefault();
+  const l = LEADS.find(x => x.id === dragLead); c.classList.remove('over');
+  if(l && l.stage !== c.dataset.col) move(l, c.dataset.col);
+});
 
 async function move(l, to){
   const prev = l.stage; l.stage = to; renderPatients(); toast(`${l.name || l.phone}: ${STAGE_LABEL[to]}`);
@@ -610,19 +652,23 @@ async function move(l, to){
 }
 
 const sh = $('#hsh'), shf = $('#hshf');
-const closeSh = () => { sh.hidden = true; shf.innerHTML = ''; };
+let shGuard = null;   // returns false to keep the sheet open (an unsent comment)
+const closeSh = force => { if(!force && shGuard && shGuard() === false) return; shGuard = null; sh.hidden = true; shf.innerHTML = ''; shf.classList.remove('leadsheet'); };
 sh.addEventListener('click', e => { if(e.target === sh || e.target.closest('[data-close]')) closeSh(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !sh.hidden) closeSh(); });
 const opts = (list, val) => list.map(([v, t]) => `<option value="${esc(v)}" ${v === val ? 'selected' : ''}>${esc(t)}</option>`).join('');
-function fieldsHTML(l){
+function fieldsHTML(l, noValue){
   const svc = SERVICES.includes(l.service) || !l.service ? SERVICES : [l.service, ...SERVICES];
   return `<div class="two"><label>სახელი<input name="name" maxlength="80" value="${esc(l.name || '')}" autocomplete="off"></label>
     <label>ტელეფონი<input name="phone" maxlength="30" inputmode="tel" value="${esc(l.phone || '')}" autocomplete="off"></label></div>
     <div class="two"><label>სერვისი<select name="service"><option value="">არ არის მითითებული</option>${opts(svc.map(s => [s, s]), l.service)}</select></label>
-    <label>საიდან მოვიდა<select name="channel">${opts(Object.entries(CHANNELS), l.channel || 'phone')}</select></label></div>
-    <label>შენიშვნა<textarea name="notes" maxlength="1000" placeholder="მაგალითად: დილით ურჩევნია, ფასი აინტერესებს">${esc(l.notes || '')}</textarea></label>`;
+    ${noValue ? '' : valueHTML(l)}</div>
+    <label>საიდან მოვიდა<select name="channel">${opts(Object.entries(CHANNELS), l.channel || 'phone')}</select></label>
+    <label>შენიშვნა<textarea name="notes" maxlength="1000" placeholder="მაგალითად: დილით ურჩევნია, ფასი აინტერესებს">${esc(l.id ? leadNotes(l) : '')}</textarea></label>`;
 }
+const valueHTML = l => `<label>ღირებულება, ₾<input name="value" inputmode="decimal" placeholder="მაგ. 350" value="${l.value ? esc(l.value) : ''}" autocomplete="off"></label>`;
 function openAdd(){
+  shGuard = null;
   shf.innerHTML = `<h3><span>ახალი პაციენტი</span><button class="hx" type="button" data-close aria-label="დახურვა">×</button></h3>
     ${fieldsHTML({})}
     <div class="row"><button class="btn" type="button" data-close>გაუქმება</button><button class="btn primary" type="submit">პაციენტის დამატება</button></div>`;
@@ -631,35 +677,78 @@ function openAdd(){
     const lead = Object.fromEntries(new FormData(shf));
     if(!lead.name.trim() && !lead.phone.trim()){ toast('ჩაწერეთ სახელი ან ტელეფონი.'); return; }
     shf.querySelector('[type=submit]').disabled = true; busy++;
-    try{ take(await call({action:'hubLeadAdd', pin: pin(), lead, by: me()})); closeSh(); pickStage = 'new'; render(); toast('პაციენტი დაემატა'); }
+    try{ take(await call({action:'hubLeadAdd', pin: pin(), lead, by: me()})); closeSh(true); pickStage = 'new'; render(); toast('პაციენტი დაემატა'); }
     catch(err){ shf.querySelector('[type=submit]').disabled = false; toast('ვერ შეინახა. სცადეთ თავიდან.'); }
     busy--;
   };
   sh.hidden = false; setTimeout(() => shf.querySelector('input').focus({preventScroll:true}), 60);
 }
+function commentsHTML(l){
+  const list = l.comments || [];
+  return list.length ? list.map(c => `<li class="${c.pending ? 'pending' : ''}"><span class="av">${esc(([...String(c.by || '?')][0] || '?').toUpperCase())}</span><div><b>${esc(c.by || 'გუნდი')}</b><small>${c.pending ? 'იგზავნება…' : fmt(c.t)}</small><p>${esc(c.text)}</p></div>${!c.pending && (ROLE === 'team' || c.by === myName()) ? `<button type="button" class="cdel" data-cdel="${esc(c.i)}" aria-label="წაშლა" title="წაშლა">${TI.trash}</button>` : ''}</li>`).join('')
+    : '<li class="none">კომენტარი ჯერ არ არის. ჩაწერეთ, რა ითქვა ზარისას, ან რა უნდა გაკეთდეს.</li>';
+}
+const myName = () => { const p = PEOPLE.find(x => x.email === ME); return p ? p.name : (ME || me()); };
 function openLead(id){
   const l = LEADS.find(x => x.id === id); if(!l) return;
   let to = l.stage;
   const pick = () => [...STAGES, LOST].map(s => `<button type="button" class="s-${s.id}" data-st="${s.id}" aria-pressed="${to === s.id}">${s.label}</button>`).join('');
+  shf.classList.add('leadsheet');
   shf.innerHTML = `<h3><span>${esc(l.name || l.phone || 'პაციენტი')}</span><button class="hx" type="button" data-close aria-label="დახურვა">×</button></h3>
+    <div class="lmeta"><span class="src src-${srcKey(l)}">${esc(leadSrc(l))}</span><span>${fmt(l.created)}</span>${l.phone ? `<span class="sp"></span><a class="btn sm" href="${telHref(l.phone)}">${I.phone}დარეკვა</a><a class="btn sm" href="${waHref(l.phone)}" target="_blank" rel="noopener">${I.chat}WhatsApp</a>` : ''}</div>
     <div class="stagepick" role="group" aria-label="ეტაპი">${pick()}</div>
-    ${fieldsHTML(l)}
-    ${l.source ? `<label>რეკლამა, საიდანაც მოვიდა<input value="${esc(l.source)}" readonly></label>` : ''}
-    <ul class="hist">${(l.history || []).map(h => `<li>${fmt(h.t)}: ${esc(STAGE_LABEL[h.stage] || h.stage)}${h.by ? ', ' + esc(h.by) : ''}</li>`).join('')}</ul>
-    <div class="row">${ROLE === 'team' ? '<button class="btn" type="button" data-del>წაშლა</button><span style="flex:1"></span>' : ''}<button class="btn" type="button" data-close>დახურვა</button><button class="btn primary" type="submit">ცვლილებების შენახვა</button></div>`;
+    <div class="lval">${valueHTML(l)}</div>
+    <section class="cmts"><h4>კომენტარები</h4><ul>${commentsHTML(l)}</ul>
+      <div class="cnew"><textarea placeholder="დაწერეთ კომენტარი…" rows="2" maxlength="2000" aria-label="ახალი კომენტარი"></textarea><button class="btn primary sm" type="button" data-csend>გაგზავნა</button></div></section>
+    <details class="ldet"><summary>დეტალები და რედაქტირება</summary><div class="ldet-b">
+      ${fieldsHTML(l, true)}
+      ${l.email ? `<label>ელ-ფოსტა<input value="${esc(l.email)}" readonly></label>` : ''}
+      ${l.source ? `<label>რეკლამა ან გვერდი, საიდანაც მოვიდა<input value="${esc(l.source)}" readonly></label>` : ''}
+      <ul class="hist">${(l.history || []).map(h => `<li>${fmt(h.t)}: ${esc(STAGE_LABEL[h.stage] || h.stage)}${h.by ? ', ' + esc(h.by) : ''}</li>`).join('')}</ul>
+    </div></details>
+    <div class="row">${ROLE === 'team' ? '<button class="btn" type="button" data-del>წაშლა</button><span style="flex:1"></span>' : ''}<button class="btn" type="button" data-close>დახურვა</button><button class="btn primary" type="submit">შენახვა</button></div>`;
+  // what the patient wrote shows open on top when it is there
+  const det = leadNotes(l); if(det) shf.querySelector('.lval').insertAdjacentHTML('afterend', `<div class="lnote">${esc(det)}</div>`);
+  const ta = shf.querySelector('.cnew textarea');
+  shGuard = () => !ta.value.trim() || confirm('კომენტარი ჯერ არ გაგზავნილა. დავხურო მაინც?');
   shf.querySelector('.stagepick').onclick = e => { const b = e.target.closest('[data-st]'); if(!b) return; to = b.dataset.st; shf.querySelector('.stagepick').innerHTML = pick(); };
+  const send = async () => {
+    const text = ta.value.trim(); if(!text) return;
+    const local = {i: 'p' + Date.now(), t: Date.now(), by: myName(), text, pending: true};
+    l.comments = [...(l.comments || []), local]; ta.value = '';
+    shf.querySelector('.cmts ul').innerHTML = commentsHTML(l); renderPatients(); busy++;
+    try{ take(await call({action:'hubLeadNote', pin: pin(), id, text, by: me()})); const n = LEADS.find(x => x.id === id); if(n && !sh.hidden) shf.querySelector('.cmts ul').innerHTML = commentsHTML(n); renderPatients(); }
+    catch(err){ l.comments = l.comments.filter(c => c !== local); ta.value = text; shf.querySelector('.cmts ul').innerHTML = commentsHTML(l); toast('კომენტარი ვერ გაიგზავნა. სცადეთ თავიდან.'); }
+    busy--;
+  };
+  shf.querySelector('[data-csend]').onclick = send;
+  ta.onkeydown = e => { if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); send(); } };
+  shf.querySelector('.cmts ul').onclick = async e => {
+    const d = e.target.closest('[data-cdel]'); if(!d || !confirm('წავშალო ეს კომენტარი?')) return;
+    busy++;
+    try{ take(await call({action:'hubLeadNoteDel', pin: pin(), id, i: d.dataset.cdel, by: me()})); const n = LEADS.find(x => x.id === id); if(n) shf.querySelector('.cmts ul').innerHTML = commentsHTML(n); renderPatients(); }
+    catch(err){ toast('ვერ წაიშალა.'); }
+    busy--;
+  };
   const del = shf.querySelector('[data-del]');
-  if(del) del.onclick = async () => { if(!confirm('წავშალო ეს პაციენტი სამუდამოდ?')) return; busy++; try{ take(await call({action:'hubLeadDelete', key: teamKey(), id})); closeSh(); render(); toast('პაციენტი წაიშალა'); }catch(e){ toast('ვერ წაიშალა.'); } busy--; };
+  if(del) del.onclick = async () => { if(!confirm('წავშალო ეს პაციენტი სამუდამოდ? მისი კომენტარებიც წაიშლება.')) return; busy++; try{ take(await call({action:'hubLeadDelete', key: teamKey(), id})); closeSh(true); render(); toast('პაციენტი წაიშალა'); }catch(e){ toast('ვერ წაიშალა.'); } busy--; };
   shf.onsubmit = async e => {
     e.preventDefault();
-    const lead = Object.fromEntries(new FormData(shf)); busy++;
-    shf.querySelector('[type=submit]').disabled = true;
+    if(ta.value.trim()) await send();
+    const f = Object.fromEntries(new FormData(shf));
+    const lead = {name: f.name, phone: f.phone, service: f.service, channel: f.channel, value: f.value, notes: f.notes};
+    const was = {name: l.name, phone: l.phone, service: l.service, channel: l.channel, value: l.value ? String(l.value) : '', notes: leadNotes(l)};
+    // keep the import's first line (which form it came from) and its [web:…] tag around what the team edits
+    const head = String(l.notes || '').split('\n')[0].trim();
+    if(l.channel === 'website' && WEBTAB[head]) lead.notes = head + (lead.notes ? '\n' + lead.notes : '');
+    if(webTag(l)) lead.notes = (lead.notes ? lead.notes + '\n' : '') + webTag(l);
+    busy++; shf.querySelector('[type=submit]').disabled = true;
     try{
-      const changed = ['name','phone','service','channel','notes'].some(k => (lead[k] || '') !== (l[k] || ''));
+      const changed = ['name','phone','service','channel','value','notes'].some(k => String(f[k] || '').trim() !== String(was[k] || '').trim());
       let r = null;
       if(changed) r = await call({action:'hubLeadEdit', pin: pin(), id, lead, by: me()});
       if(to !== l.stage) r = await call({action:'hubLeadMove', pin: pin(), id, stage: to, by: me()});
-      if(r) take(r); closeSh(); render(); if(r) toast('ცვლილებები შენახულია');
+      if(r) take(r); closeSh(true); render(); if(r) toast('ცვლილებები შენახულია');
     }catch(err){ shf.querySelector('[type=submit]').disabled = false; toast('ვერ შეინახა. სცადეთ თავიდან.'); }
     busy--;
   };
@@ -1330,10 +1419,13 @@ function demoCall(body){
       return {id: 'D' + i, created, name, phone, email: '', service, channel, source: channel === 'facebook' ? 'facebook / paid / implant_nov' : '', stage, notes, updated: created, history: h};
     };
     DEMO_LEADS = [
-      mk(1,'ანა ბერიძე','+995 555 12 34 56','კონსულტაცია','website','new', 2 * H, 'შაბათს ურჩევნია.'),
+      mk(1,'ანა ბერიძე','+995 555 12 34 56','წმენდა და შემოწმება','website','new', 2 * H, 'ჯავშნები\nსასურველი: 2026-11-20, დილა (10:00 – 13:00)\n[web:demo1]'),
+      mk(11,'ნინო','+995 577 44 33 22','უფასო კონსულტაცია','website','new', 5 * H, 'უფასო კონსულტაცია\nშენიშვნა: იმპლანტზე მინდა კონსულტაცია\n[web:demo2]'),
+      mk(12,'ზურაბი','zurab@example.com','კითხვა ექიმს','website','contacted', 30 * H, 'კითხვა ექიმს\nკითხვა: რამდენ ხანს გრძელდება იმპლანტაცია?\n[web:demo3]'),
       mk(2,'გიორგი','599 22 33 44','კბილის აღდგენა ან ჩანაცვლება','facebook','new', 7 * H, 'იმპლანტის ფასი აინტერესებს.'),
       mk(3,'მარიამ ქ.','577 10 20 30','წმენდა და შემოწმება','sms','new', 26 * H),
       mk(4,'ლევანი','591 00 11 22','ღიმილის გალამაზება','instagram','booked', 2 * D, 'ჩაწერილია 8 ნოემბერს, 15:00-ზე.'),
+      mk(13,'ქეთი','599 88 77 66','კბილის აღდგენა ან ჩანაცვლება','facebook','contacted', 20 * H),
       mk(5,'თამარ','555 66 77 88','ბავშვისთვის','google','booked', 3 * D),
       mk(6,'ნიკა','558 44 55 66','კბილი ან ღრძილი მაწუხებს','website','done', 4 * D),
       mk(7,'ეკა','593 12 12 12','კონსულტაცია','facebook','done', 9 * D),
@@ -1341,6 +1433,8 @@ function demoCall(body){
       mk(9,'სალომე','595 33 22 11','წმენდა და შემოწმება','sms','done', 35 * D),
       mk(10,'ირაკლი','592 45 45 45','კბილის აღდგენა ან ჩანაცვლება','google','booked', 40 * D),
     ];
+    DEMO_LEADS.forEach((l, i) => { l.value = [0, 350, 0, 1200, 160, 0, 2400, 80, 0, 900, 0, 0, 1800][i] || 0; l.comments = []; });
+    DEMO_LEADS[1].comments = [{i: 'c1', t: Date.now() - 3 * 3600e3, by: 'თამარი', text: 'დავურეკე, არ უპასუხა. საღამოს კიდევ ვცდი.'}];
   }
   const d = new Date(), m = k => { const x = new Date(d.getFullYear(), d.getMonth() - k, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2,'0')}`; };
   if(!DEMO_TASKS){
@@ -1359,7 +1453,9 @@ function demoCall(body){
   const L = id => DEMO_LEADS.find(l => l.id === id);
   if(body.action === 'hubLeadAdd') DEMO_LEADS.unshift({id: 'D' + Date.now(), created: Date.now(), ...body.lead, source: '', stage: 'new', updated: Date.now(), history: [{t: Date.now(), stage: 'new', by: body.by}]});
   if(body.action === 'hubLeadMove'){ const l = L(body.id); l.stage = body.stage; l.history.push({t: Date.now(), stage: body.stage, by: body.by}); }
-  if(body.action === 'hubLeadEdit') Object.assign(L(body.id), body.lead);
+  if(body.action === 'hubLeadEdit') Object.assign(L(body.id), body.lead, {value: Number(body.lead.value) || 0});
+  if(body.action === 'hubLeadNote') L(body.id).comments.push({i: 'c' + Date.now(), t: Date.now(), by: 'თამარი', text: body.text});
+  if(body.action === 'hubLeadNoteDel'){ const l = L(body.id); l.comments = l.comments.filter(c => c.i !== body.i); }
   if(body.action === 'hubTaskAdd') DEMO_TASKS.push({id: 'T' + Date.now(), created: Date.now(), notes: '', owners: [], status: 'todo', priority: '', due: '', ...body.task, by: 'თამარი', creator: 'tamari@demo', updated: Date.now(), updates: [{t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'add'}]});
   if(body.action === 'hubTaskEdit') Object.assign(DEMO_TASKS.find(t => t.id === body.id), body.task, {updated: Date.now()});
   if(body.action === 'hubTaskNote') DEMO_TASKS.find(t => t.id === body.id).updates.push({i: 'n' + Date.now(), t: Date.now(), by: 'თამარი', be: 'tamari@demo', k: 'note', v: body.text, m: body.m, f: (body.files || []).map((f, k) => { const id = 'demo' + Date.now() + k; (window.__DEMO_FILES = window.__DEMO_FILES || {})[id] = f; return {id, name: f.name, w: f.w, h: f.h}; })});
