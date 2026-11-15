@@ -74,7 +74,7 @@ body.dark .note{color:#B3A595}
     <div class="status" id="st" hidden></div>
   </div>
 </div>
-<script src="core.js?v=31"></script>
+<script src="core.js?v=30"></script>
 <script>
 let CFG = null, POSTS = [], STATE = {comments:[], status:{}}, sending = 0;
 const commentsOf = id => (STATE.comments || []).filter(c => c.post === id);
@@ -263,6 +263,6 @@ function refreshViews(){
   document.addEventListener('visibilitychange', tick);
 })();
 </script>
-<script src="hub.js?v=29"></script>
+<script src="hub.js?v=30"></script>
 </body>
 </html>

@@ -715,7 +715,7 @@ function paintCview(){
   pane.querySelector('.studiobody').hidden = !team;
   pane.querySelector('.ctrls').hidden = team;
   pane.querySelector('.body:not(.studiobody)').hidden = team;
-  if(team && !pane.querySelector('.studiobody iframe')) pane.querySelector('.studiobody').innerHTML = `<iframe src="studio.html?c=${CLIENT}&embed=1" title="სტუდიო"></iframe>`;
+  if(team && !pane.querySelector('.studiobody iframe')) pane.querySelector('.studiobody').innerHTML = `<iframe src="studio.html?c=${CLIENT}&embed=1&v=31" title="სტუდიო"></iframe>`;
   if(can) setSeg(seg, 'data-cview', cview);
 }
 document.addEventListener('click', e => {
