@@ -22,10 +22,12 @@ const mediaUrl = f => {
 /* a <video> pointing at a Drive player becomes that player's iframe, wherever a page draws it */
 function driveVideos(root){
   if(!root || !root.querySelectorAll) return;
-  const list = root.matches && root.matches('video[src*="drive.google.com/file/d/"]') ? [root] : root.querySelectorAll('video[src*="drive.google.com/file/d/"]');
+  /* src, or data-src when the page loads videos only as they scroll into view */
+  const sel = 'video[src*="drive.google.com/file/d/"], video[data-src*="drive.google.com/file/d/"]';
+  const list = root.matches && root.matches(sel) ? [root] : root.querySelectorAll(sel);
   list.forEach(v => {
     const f = document.createElement('iframe');
-    f.src = v.getAttribute('src'); f.allow = 'autoplay; fullscreen'; f.setAttribute('allowfullscreen', ''); f.title = 'ვიდეო';
+    f.src = v.getAttribute('src') || v.getAttribute('data-src'); f.allow = 'autoplay; fullscreen'; f.setAttribute('allowfullscreen', ''); f.title = 'ვიდეო';
     /* the frame has no size of its own: give it the feed's 4:5 video shape, or it collapses to a 150px strip */
     f.className = (v.className + ' gdvideo').trim(); f.style.cssText = 'width:100%;height:auto;aspect-ratio:4/5;border:0;display:block;background:#000';
     const box = v.parentElement;
@@ -34,7 +36,7 @@ function driveVideos(root){
     if(box) box.querySelectorAll(':scope > .mute, :scope > .playov').forEach(b => b.remove());
   });
 }
-new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => { if(n.nodeType === 1) driveVideos(n); }))).observe(document.documentElement, {childList: true, subtree: true});
+new MutationObserver(ms => ms.forEach(m => m.type === 'attributes' ? driveVideos(m.target) : m.addedNodes.forEach(n => { if(n.nodeType === 1) driveVideos(n); }))).observe(document.documentElement, {childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-src']});
 /* posts added from the studio come with the shared state; every page shows them next to config.json's posts */
 function mergeExtra(cfg, s){
   if(!cfg || !s || !Array.isArray(s.extraPosts)) return;
