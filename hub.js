@@ -303,7 +303,7 @@ $('#pContent').addEventListener('keydown', e => { const o = e.target.closest('[d
 /* post detail with approve and comment (uses preview.html's approve() and comment sheet) */
 let pmId = null, pmVar = 0, lnk = {url: '', msg: ''};
 function openPm(id){ pmId = id; pmVar = 0; lnk = {url: '', msg: ''}; pauseIg(); renderPm(true); $('#pm').hidden = false; placeOverlays(); document.addEventListener('keydown', pmKey); }
-function closePm(){ const v = $('#pm video'); if(v) v.pause(); $('#pm').hidden = true; $('#pm').innerHTML = ''; pmId = null; placeOverlays(); document.removeEventListener('keydown', pmKey); }
+function closePm(){ $('#pm').querySelectorAll('video').forEach(v => v.pause()); reelMode = false; delete $('#pm').dataset.rk; document.documentElement.classList.remove('reelmode'); $('#pm').hidden = true; $('#pm').innerHTML = ''; pmId = null; placeOverlays(); document.removeEventListener('keydown', pmKey); }
 const pmKey = e => { if(e.key === 'Escape' && $('#sh').hidden) closePm(); };
 const IGI = {
   heart: SV('<path d="M12 20.5s-8-4.7-8-10.6A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 8 2.7c0 5.9-8 10.6-8 10.6z"/>', 24),
@@ -367,7 +367,56 @@ function sideYT(g, v){
     </div>
     ${reviewBar(g, v)}`;
 }
+/* a reel opened from a post link on a phone: the video fills the screen like an Instagram Reel,
+   with the caption and only two buttons (approve, ask for changes). Versions swipe sideways. */
+let reelMode = false;
+const isPhone = () => matchMedia('(max-width: 760px)').matches;
+const isReel = g => !!(g.video || (g.variants && g.variants.some(v => v.video)));
+function reelButtons(g, v){
+  if(g.posted) return '';
+  const done = statusOf(v.id) === 'approved';
+  const ok = g.variants ? (done ? 'ეს ვარიანტი არჩეულია' : 'ამ ვარიანტს ვირჩევ') : (done ? 'დადასტურებულია' : 'დადასტურება');
+  return `<button type="button" class="rl-ok${done ? ' done' : ''}" data-ok>${I.check}${ok}</button><button type="button" class="rl-cm" data-cm>შესაცვლელია</button>`;
+}
+function reelVideos(play){
+  $('#pm').querySelectorAll('.rl-slide').forEach((sl, i) => { const v = sl.querySelector('video'); if(!v) return; if(i === pmVar && play) v.play().catch(() => {}); else v.pause(); });
+}
+function renderReel(full){
+  const g = POSTS.find(p => p.id === pmId); if(!g){ closePm(); return; }
+  const vs = g.variants || [g], pm = $('#pm');
+  // the post list can change under an open reel (server state arrives, a version is added or removed): rebuild then
+  const key = vs.map(x => x.id + ':' + x.video).join('|');
+  if(!full && pm.dataset.rk !== key){ full = true; pmVar = Math.min(pmVar, vs.length - 1); }
+  const v = vs[pmVar] || vs[0];
+  if(full){
+    pm.dataset.rk = key;
+    pm.className = 'pm pm--reel' + (vs.some(x => /^gd:/.test(x.video || '')) ? ' rl-drive' : '');
+    pm.innerHTML = `<div class="rl-track">${vs.map((x, i) => `<div class="rl-slide" data-i="${i}">${x.video
+        ? `<video src="${mediaUrl(x.video)}" poster="${mediaUrl(x.media[0])}" playsinline muted loop preload="${i === pmVar ? 'auto' : 'none'}"></video>`
+        : `<img src="${mediaUrl(x.media[0])}" alt="">`}</div>`).join('')}</div>
+      ${vs.length > 1 ? `<div class="rl-var">ვარიანტი <span>${pmVar + 1}</span>/${vs.length} · ← →</div>` : ''}
+      <div class="rl-snd" aria-hidden="true">${IC.muted}</div>
+      <div class="rl-bot"><div class="rl-cap"><b>${esc(CFG.username)}</b> <span></span></div><div class="rl-b"></div></div>`;
+    const tr = pm.querySelector('.rl-track');
+    requestAnimationFrame(() => { tr.scrollLeft = pmVar * tr.clientWidth; reelVideos(true); });
+    tr.addEventListener('scroll', () => {
+      const i = Math.round(tr.scrollLeft / tr.clientWidth);
+      if(i !== pmVar && vs[i]){ pmVar = i; const n = pm.querySelector('.rl-var span'); if(n) n.textContent = i + 1; renderReel(false); reelVideos(true); }
+    }, {passive: true});
+  }
+  pm.querySelector('.rl-cap span').textContent = v.caption || '';
+  pm.querySelector('.rl-b').innerHTML = reelButtons(g, v);
+}
+function reelTap(e){
+  const sl = e.target.closest('.rl-slide'); if(!sl) return false;
+  const v = sl.querySelector('video'); if(!v) return true;
+  // first tap turns the sound on (phones start videos muted); after that a tap pauses and plays
+  if(v.muted){ $('#pm').querySelectorAll('.rl-slide video').forEach(x => x.muted = false); $('#pm').classList.add('rl-on'); v.play().catch(() => {}); }
+  else if(v.paused) v.play().catch(() => {}); else v.pause();
+  return true;
+}
 function renderPm(full){
+  if(reelMode) return renderReel(full);
   const g = POSTS.find(p => p.id === pmId); if(!g){ closePm(); return; }
   const v = g.variants ? g.variants[pmVar] : g;
   const kind = VIEW_OF[plat] ? VIEW_OF[plat][0] : 'ig';
@@ -381,6 +430,7 @@ function renderPm(full){
   } else $('#pm .pm-side').innerHTML = side;
 }
 $('#pm').addEventListener('click', e => {
+  if(reelMode){ if(e.target.closest('.rl-cap')){ e.target.closest('.rl-cap').classList.toggle('open'); return; } if(reelTap(e)) return; }
   if(e.target.id === 'pm' || e.target.closest('[data-close]')){ closePm(); return; }
   const cg = e.target.closest('[data-car-go]'); if(cg){ const car = $('#pm [data-car]'); car.scrollBy({left: car.clientWidth * +cg.dataset.carGo, behavior: 'smooth'}); return; }
   const vb = e.target.closest('[data-var]'); if(vb){ pmVar = +vb.dataset.var; renderPm(true); return; }
@@ -415,6 +465,7 @@ function openFromLink(final){
   const g = POSTS.find(p => p.id === want || (p.variants && p.variants.some(v => v.id === want)));
   if(!g){ if(!final && !stateIn) return; deepWant = null; undeep(); toast('ეს პოსტი აღარ არის გეგმაში.'); return; }
   deepWant = null;
+  if(isPhone() && isReel(g)){ reelMode = true; document.documentElement.classList.add('reelmode'); }
   openPm(g.id);
   if(g.variants) pmVar = Math.max(0, g.variants.findIndex(v => v.id === want)), renderPm(true);
   undeep();
