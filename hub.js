@@ -390,9 +390,9 @@ function renderReel(full){
   const v = vs[pmVar] || vs[0];
   if(full){
     pm.dataset.rk = key;
-    pm.className = 'pm pm--reel' + (vs.some(x => /^gd:/.test(x.video || '')) ? ' rl-drive' : '');
+    pm.className = 'pm pm--reel';
     pm.innerHTML = `<div class="rl-track">${vs.map((x, i) => `<div class="rl-slide" data-i="${i}">${x.video
-        ? `<video src="${mediaUrl(x.video)}" poster="${mediaUrl(x.media[0])}" playsinline muted loop preload="${i === pmVar ? 'auto' : 'none'}"></video>`
+        ? `<video src="${mediaUrl(x.video)}" poster="${mediaUrl(x.media[0])}" playsinline muted loop ${i === pmVar ? 'autoplay preload="auto"' : 'preload="none"'}></video>`
         : `<img src="${mediaUrl(x.media[0])}" alt="">`}</div>`).join('')}</div>
       ${vs.length > 1 ? `<div class="rl-var">ვარიანტი <span>${pmVar + 1}</span>/${vs.length} · ← →</div>` : ''}
       <div class="rl-snd" aria-hidden="true">${IC.muted}</div>

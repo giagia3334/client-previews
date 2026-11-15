@@ -15,7 +15,7 @@ const ls = {
 const mediaUrl = f => {
   const m = /^gd:([\w-]+)(?::([vt]))?$/.exec(String(f || ''));
   if(!m) return BASE + 'media/' + f;
-  if(m[2] === 'v') return 'https://drive.google.com/file/d/' + m[1] + '/preview';   // Drive's own player (Drive does not stream into <video> on other sites)
+  if(m[2] === 'v') return 'https://likedent-media.gia-ananidze-98.workers.dev/v/' + m[1];   // plain MP4 streamed from Drive by our worker (Drive's own player is clunky and fails on iPhone)
   if(m[2] === 't') return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1080';
   return 'https://lh3.googleusercontent.com/d/' + m[1] + '=w1080';
 };
