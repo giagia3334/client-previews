@@ -844,7 +844,7 @@ html.reelmode,html.reelmode body{overflow:hidden;overscroll-behavior:none}
 .pm--reel .rl-track::-webkit-scrollbar{display:none}
 .pm--reel .rl-slide{position:relative;flex:0 0 100%;height:100%;scroll-snap-align:start;scroll-snap-stop:always}
 .pm--reel .rl-slide video,.pm--reel .rl-slide img,.pm--reel .rl-slide iframe{position:absolute;inset:0;width:100%!important;height:100%!important;aspect-ratio:auto!important;object-fit:cover;display:block;background:#000;border:0}
-.pm--reel .rl-slide.rl-wide video{object-fit:contain!important;bottom:22vh!important;top:0!important;height:auto!important}
+.pm--reel .rl-slide.rl-wide video{object-fit:contain!important;inset:auto!important;left:0!important;top:calc((100% - 170px - 56.25vw)/2)!important;height:56.25vw!important;width:100%!important}
 .pm--reel .rl-var{position:absolute;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);font:600 12.5px var(--font);padding:5px 11px;border-radius:999px;pointer-events:none;white-space:nowrap}
 .pm--reel .rl-snd{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center;pointer-events:none;transition:opacity .25s}
 .pm--reel.rl-on .rl-snd{opacity:0}
