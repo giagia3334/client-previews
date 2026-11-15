@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>Studio · Instagram feed</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400..800&display=swap">
 <link rel="stylesheet" href="ig.css">
 <style>
 body{padding:16px}
@@ -65,6 +66,54 @@ body.dark .addf{background:#1E1915;color:#F1EBE3}
 body.dark .addf .files{color:#F1EBE3}
 .addf .row{display:flex;gap:8px;justify-content:flex-end}
 .addf .msg{font-size:13px}
+
+/* ---------- v31 (15 Nov): same look as the client hub (hub.css tokens) + explicit caption editing ---------- */
+:root{--mustard:#A07800;--mustard-ink:#7A5B00;--mustard-tint:#F5EBC9;--emerald:#0E6B53;--emerald-tint:#D9EEE6;--ink:#1C1F22;--ink-2:#4A5056;--slate:#6B7278;--mist:#E6E9EB;--canvas:#F3F4F5;--surface:#FFFFFF;--ease:cubic-bezier(.22,1,.36,1);--font:"Noto Sans Georgian",-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body.dark{--mustard:#D9A821;--mustard-ink:#E8BE4A;--mustard-tint:#3A3015;--emerald:#33B88E;--emerald-tint:#14382D;--ink:#ECEEEF;--ink-2:#C2C7CB;--slate:#979EA4;--mist:#2B3034;--canvas:#16191B;--surface:#1F2326}
+body{background:var(--canvas);padding:24px 16px}
+.wrapx{grid-template-columns:340px minmax(0,1fr);gap:32px}
+.panel,body.dark .panel{background:var(--surface);border:1px solid var(--mist);border-radius:22px;padding:22px;gap:12px;color:var(--ink);font-family:var(--font);box-shadow:0 1px 2px rgba(20,23,26,.04),0 12px 32px -18px rgba(20,23,26,.18)}
+.panel h1{font-size:22px;font-weight:700;letter-spacing:-.015em}
+.panel h1 small{color:var(--mustard-ink);font-weight:600}
+.panel p,body.dark .panel p{color:var(--slate);font-size:13.5px}
+.pbtn{border:1px solid var(--mist);background:var(--surface);color:var(--ink);font:600 14px/1.2 var(--font);border-radius:999px;padding:11px 16px;text-decoration:none;transition:background .2s var(--ease),border-color .2s var(--ease),transform .15s var(--ease)}
+.pbtn:hover{border-color:var(--slate)}
+.pbtn:active{transform:scale(.98)}
+.pbtn.primary{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.pbtn.primary:hover{background:var(--ink-2)}
+.lbl{color:var(--slate);font-size:11.5px;letter-spacing:.06em;margin-bottom:6px}
+.keyrow input{border:1px solid var(--mist);border-radius:999px;padding:10px 14px;background:var(--canvas);color:var(--ink)}
+.msg{color:var(--ink-2)}
+.ok{color:var(--emerald) !important}
+.clist{gap:6px;max-height:360px}
+.ci{border:1px solid var(--mist);border-left:3px solid #E8A3B9;background:var(--canvas);border-radius:12px;padding:9px 11px;color:var(--ink);transition:background .2s var(--ease)}
+.ci:hover{background:var(--surface)}
+.ci.ok{border-left-color:var(--mustard)}
+.ci.done{border-left-color:var(--emerald);opacity:.65}
+.ci small{color:var(--mustard-ink)}
+.fix{border-color:var(--emerald);color:var(--emerald);border-radius:999px;padding:4px 10px}
+.fixed{color:var(--emerald)}
+.lnk{color:var(--mustard-ink)}
+.app{border-radius:44px;box-shadow:0 0 0 10px #15181B,0 0 0 11px #2B3034,0 30px 60px -20px rgba(20,23,26,.45)}
+.tools button[aria-pressed="true"]{background:var(--mustard);color:#fff}
+.mbar,body.dark .mbar{background:var(--surface);border-color:var(--mist);color:var(--ink);font-family:var(--font)}
+.mbar .pbtn.primary{color:var(--surface)}
+.addf,body.dark .addf{background:var(--surface);color:var(--ink);border-radius:22px;font-family:var(--font)}
+.addf label{color:var(--slate)}
+.addf input,.addf textarea{border-color:var(--mist);border-radius:12px;background:var(--canvas);color:var(--ink)}
+/* caption editing: a visible button, a text box, save / cancel */
+.cap [data-cap]{white-space:pre-line}
+.capedit{display:flex;align-items:center;gap:8px;padding:2px 14px 6px;font-family:var(--font)}
+.capbtn{appearance:none;border:1px solid var(--mist);background:var(--surface);color:var(--ink);font:600 12.5px/1 var(--font);border-radius:999px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:border-color .2s var(--ease)}
+.capbtn:hover{border-color:var(--slate)}
+.capbtn.save{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.capbox{display:none;flex-direction:column;gap:8px;padding:4px 14px 10px;font-family:var(--font)}
+.capbox textarea{width:100%;box-sizing:border-box;min-height:150px;resize:vertical;font:14px/1.5 var(--font);border:1px solid var(--mustard);border-radius:12px;padding:10px 12px;background:var(--surface);color:var(--ink);outline:none;box-shadow:0 0 0 3px var(--mustard-tint)}
+.capbox .row{display:flex;gap:8px;justify-content:flex-end;align-items:center}
+.capbox .cnt2{margin-right:auto;font-size:12px;color:var(--slate)}
+.post.editing .capbox{display:flex}
+.post.editing .cap,.post.editing .capedit{display:none}
+.capsaved{font-size:12px;color:var(--emerald);font-weight:600}
 </style>
 </head>
 <body>
@@ -72,7 +121,7 @@ body.dark .addf .files{color:#F1EBE3}
 <div class="wrapx">
   <aside class="panel" aria-label="მართვა">
     <h1><small id="cname">Studio</small>ინსტაგრამის ფიდი</h1>
-    <p>პოსტები გადაათრიე ადგილზე, პოსტის გახსნისას ტექსტი პირდაპირ შეცვალე. ცვლილებები ყველა მოწყობილობაზე ჩანს. როცა რიგი მზადაა, დააჭირე ქვედა ღილაკს და Posting Schedule განახლდება.</p>
+    <p>პოსტები გადაათრიე ადგილზე. ტექსტის შესაცვლელად გახსენი პოსტი და დააჭირე „✎ ტექსტის შეცვლა“ (გამოქვეყნებულ პოსტებზეც მუშაობს). ცვლილებები ყველა მოწყობილობაზე ჩანს. როცა რიგი მზადაა, დააჭირე ქვედა ღილაკს და Posting Schedule განახლდება.</p>
     <p id="signedIn" class="ok" hidden>✓ შესული ხარ Google-ით, ცვლილებები ყველასთან ინახება.</p>
     <button class="pbtn" id="addBtn" type="button">＋ ახალი პოსტი</button>
     <div id="keyBox">
@@ -111,7 +160,7 @@ body.dark .addf .files{color:#F1EBE3}
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-<script src="core.js?v=31"></script>
+<script src="core.js?v=30"></script>
 <script>
 let CFG = null, LAYOUT = null, POSTS = [], STATE = {comments:[], status:{}};
 const KEYNAME = 'igs_key_' + CLIENT;
@@ -187,7 +236,7 @@ function refreshViews(){
   if($('#fv').hidden){ renderGrid(); return; }
   document.querySelectorAll('#feed [data-cap]').forEach(el => {
     if(el === document.activeElement) return;
-    const p = POSTS.find(x => x.id === el.dataset.cap); if(p && el.innerText.replace(/\n$/, '') !== p.caption) el.textContent = p.caption;
+    const p = POSTS.find(x => x.id === el.dataset.cap); if(p && el.textContent !== p.caption) el.textContent = p.caption;
   });
 }
 
@@ -270,7 +319,9 @@ function renderFeed(){
       ? `<video src="${mediaUrl(p.video)}" poster="${mediaUrl(p.media[0])}" playsinline muted loop preload="metadata"></video><button type="button" class="mute">${IC.muted}</button><span class="playov">${IC.play}</span>`
       : `<div class="track" data-n="${p.media.length}">${p.media.map(m => `<img src="${mediaUrl(m)}" alt="" loading="lazy">`).join('')}</div>${p.media.length > 1 ? `<span class="cnt">1/${p.media.length}</span>` : ''}`}</div>
     <div class="pa">${IC.heart}${IC.cmt}${IC.send}<span class="sp"></span>${p.variants ? `<div class="dots">${p.variants.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : p.media.length > 1 && !p.video ? `<div class="dots">${p.media.map((m,i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}${IC.save}</div>
-    <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}" contenteditable="true" spellcheck="false">${esc(p.caption)}</span></div>
+    <div class="cap"><b>${esc(CFG.username)}</b><span data-cap="${p.id}">${esc(p.caption)}</span></div>
+    <div class="capedit"><button type="button" class="capbtn" data-capedit="${p.id}">✎ ტექსტის შეცვლა</button><span class="capsaved" data-capsaved="${p.id}" hidden>✓ შენახულია</span></div>
+    <div class="capbox"><textarea data-capta="${p.id}" maxlength="2200" spellcheck="false" aria-label="პოსტის ტექსტი"></textarea><div class="row"><span class="cnt2"></span><button type="button" class="capbtn" data-capcancel="${p.id}">გაუქმება</button><button type="button" class="capbtn save" data-capsave="${p.id}">შენახვა</button></div></div>
     <div class="cmts">${idsOf(p).flatMap(id => commentsOf(id).map(c => ({...c, vi: p.variants ? idsOf(p).indexOf(id) + 1 : 0}))).sort((a, b) => a.ts - b.ts).map(c => `<div class="cm${c.type==='approve' ? ' ok' : ''}"><b>${esc(c.name)}</b>${c.vi ? `[ვარიანტი ${c.vi}] ` : ''}${c.type==='approve' ? (c.vi ? '✓ აირჩია' : '✓ დაადასტურა') : esc(c.text)}<small>${fmtTime(c.ts)}</small>${fixHTML(c)}</div>`).join('')}</div>
     <div class="pdate">${p.posted ? 'გამოქვეყნებული' : 'დაგეგმილი'}${p.posted ? '' : ` · <button type="button" class="lnk" data-link="${p.id}">🔗 ბმული დასადასტურებლად</button>`}</div>
   </article>`).join('');
@@ -281,9 +332,24 @@ function renderFeed(){
   document.querySelectorAll('#feed video').forEach(v => { const ov = v.parentNode.querySelector('.playov'); v.addEventListener('play', () => ov.hidden = true); v.addEventListener('pause', () => ov.hidden = false); });
 }
 $('#feed').addEventListener('input', e => {
-  const el = e.target.closest('[data-cap]'); if(!el) return;
-  const txt = el.innerText.replace(/\n$/, ''); idsOf(groupOf(el.dataset.cap)).forEach(id => change({t:'caption', id, text: txt}));
+  const ta = e.target.closest('[data-capta]'); if(!ta) return;
+  ta.closest('.capbox').querySelector('.cnt2').textContent = ta.value.length + ' / 2200';
 });
+/* caption editing: open the box, save sends one caption change for every version of the post (posted ones too) */
+$('#feed').addEventListener('click', e => {
+  const ed = e.target.closest('[data-capedit]'), cn = e.target.closest('[data-capcancel]'), sv = e.target.closest('[data-capsave]');
+  if(!ed && !cn && !sv) return;
+  e.stopPropagation();
+  const post = (ed || cn || sv).closest('.post'), id = (ed || cn || sv).dataset.capedit || (cn || sv || {}).dataset?.capcancel || (cn || sv || {}).dataset?.capsave;
+  const ta = post.querySelector('[data-capta]');
+  if(ed){ const p = groupOf(id); ta.value = p ? p.caption : ''; post.classList.add('editing'); ta.dispatchEvent(new Event('input', {bubbles:true})); ta.focus(); return; }
+  if(cn){ post.classList.remove('editing'); return; }
+  const txt = ta.value.replace(/\s+$/, '');
+  idsOf(groupOf(id)).forEach(x => change({t:'caption', id: x, text: txt}));
+  post.querySelector('[data-cap]').textContent = txt; post.classList.remove('editing');
+  const ok = post.querySelector('[data-capsaved]'); ok.hidden = false; setTimeout(() => ok.hidden = true, 3000);
+  if(!auth()) msg(NOAUTH); else toast('ტექსტი შენახულია ✓');
+}, true);
 $('#feed').addEventListener('click', e => {
   const lk = e.target.closest('[data-link]'); if(lk){ copyPostLink(lk.dataset.link); return; }
   const mb = e.target.closest('.mute'); if(mb){ const v = mb.parentNode.querySelector('video'); v.muted = !v.muted; mb.innerHTML = v.muted ? IC.muted : IC.sound; if(v.paused) v.play().catch(()=>{}); return; }
