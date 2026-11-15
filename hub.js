@@ -407,17 +407,21 @@ async function copyLink(id){
   inp.select();
 }
 /* ?post=ID opens that one post straight away, with the approve buttons */
-function openFromLink(){
-  const want = Q.get('post'); if(!want) return;
+/* posts added from the studio arrive with the server state, after the first draw: until that state is in,
+   a missing post is not yet "gone", so wait for the next refresh (final = the server answered, or 8 s passed) */
+let deepWant = Q.get('post'), stateIn = false;
+function openFromLink(final){
+  const want = deepWant; if(!want) return;
   const g = POSTS.find(p => p.id === want || (p.variants && p.variants.some(v => v.id === want)));
-  if(!g){ undeep(); toast('ეს პოსტი აღარ არის გეგმაში.'); return; }
+  if(!g){ if(!final && !stateIn) return; deepWant = null; undeep(); toast('ეს პოსტი აღარ არის გეგმაში.'); return; }
+  deepWant = null;
   openPm(g.id);
   if(g.variants) pmVar = Math.max(0, g.variants.findIndex(v => v.id === want)), renderPm(true);
   undeep();
 }
 /* re-render the other views whenever the Instagram preview refreshes its data */
 const igRefresh = window.refreshViews;
-window.refreshViews = function(){ igRefresh.apply(this, arguments); renderPlat(); if(pmId) renderPm(false); };
+window.refreshViews = function(){ igRefresh.apply(this, arguments); stateIn = true; renderPlat(); if(pmId) renderPm(false); if(deepWant && ready()) openFromLink(); };
 
 /* ---------- patients ---------- */
 async function call(body){
@@ -1241,7 +1245,7 @@ async function boot(){
   document.querySelectorAll('[data-client]').forEach(e => e.textContent = CFGH.client || 'Like Dent');
   // the Instagram data arrives a moment later; draw the other platforms (and open a linked post) as soon as it is there
   const wait = setInterval(() => { if(ready()){ clearInterval(wait); renderPlat(); openFromLink(); } }, 40);
-  setTimeout(undeep, 8000);   // never leave the page covered if something fails
+  setTimeout(() => { if(ready()) openFromLink(true); undeep(); }, 8000);   // never leave the page covered if something fails
   /* open instantly: draw from what this device saw last time, then refresh from the server in the background */
   const signedIn = () => !!(session() || pin() || teamKey());
   const pubFrom = r => { TABS = Object.assign({content:true, patients:false, analytics:false, tasks:false}, (r.settings || {}).tabs || {}); GCLIENT = r.clientId || ''; };
